@@ -665,6 +665,22 @@ app.get('/api/health', (req, res) => {
     res.json({ success: true, message: 'Server running' });
 });
 
+// Self-ping to keep server alive (every 14 minutes)
+if (process.env.RENDER) {
+    setInterval(() => {
+        const https = require('https');
+        const url = process.env.RENDER_EXTERNAL_URL || 'https://answub-back.onrender.com';
+        
+        https.get(`${url}/api/health`, (res) => {
+            console.log(`[Self-Ping] Status: ${res.statusCode} at ${new Date().toISOString()}`);
+        }).on('error', (err) => {
+            console.error(`[Self-Ping] Error: ${err.message}`);
+        });
+    }, 14 * 60 * 1000); // 14 minutes in milliseconds
+    
+    console.log('✅ Self-ping enabled - will ping every 14 minutes to keep server alive');
+}
+
 // Cleanup old login attempts every hour
 setInterval(() => {
     const now = Date.now();
