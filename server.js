@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DB_FILE = path.join(__dirname, 'database.json');
+const INVITES_FILE = path.join(__dirname, 'invites.json');
 
 // Rate limiting storage (in-memory)
 const loginAttempts = new Map();
@@ -24,6 +25,30 @@ function initDB() {
         const initialData = { users: [], keys: [] };
         fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
     }
+}
+
+// Initialize invites file
+function initInvites() {
+    if (!fs.existsSync(INVITES_FILE)) {
+        const initialInvites = { invites: [] };
+        fs.writeFileSync(INVITES_FILE, JSON.stringify(initialInvites, null, 2));
+    }
+}
+
+// Read invites
+function readInvites() {
+    try {
+        const data = fs.readFileSync(INVITES_FILE, 'utf8');
+        return JSON.parse(data);
+    } catch (error) {
+        return { invites: [] };
+    }
+}
+
+// Check if invite code is valid
+function isValidInvite(code) {
+    const invitesData = readInvites();
+    return invitesData.invites && invitesData.invites.includes(code);
 }
 
 function readDB() {
@@ -131,6 +156,7 @@ function addTimeToKey(expiresAt, duration, amount) {
 }
 
 initDB();
+initInvites();
 
 // AUTH ROUTES
 
@@ -150,11 +176,16 @@ function validateEmail(email) {
 
 // Register
 app.post('/api/auth/register', (req, res) => {
-    const { username, email, password } = req.body;
+    const { username, email, password, inviteCode } = req.body;
     
     // Input validation
-    if (!username || !email || !password) {
-        return res.json({ success: false, message: 'All fields required' });
+    if (!username || !email || !password || !inviteCode) {
+        return res.json({ success: false, message: 'All fields required, including invite code' });
+    }
+    
+    // Validate invite code
+    if (!isValidInvite(inviteCode)) {
+        return res.json({ success: false, message: 'Invalid invite code. Registration is invite-only.' });
     }
     
     if (!validateInput(username, 30)) {

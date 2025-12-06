@@ -1,5 +1,6 @@
 node_modules/
 database.json
+invites.json
 *.log
 .env
 
