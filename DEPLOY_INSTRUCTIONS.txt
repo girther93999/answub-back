@@ -1,0 +1,63 @@
+========================================
+DEPLOY TO GITHUB & RENDER
+========================================
+
+STEP 1: PUSH TO GITHUB
+------------------------
+1. Open the "backend" folder
+2. Double-click "push_to_github.bat"
+3. Enter your GitHub credentials if asked
+4. Done! Your code is on GitHub
+
+
+STEP 2: DEPLOY TO RENDER.COM
+------------------------------
+1. Go to: https://render.com
+2. Sign in (or create account)
+3. Click "New +" → "Web Service"
+4. Click "Connect GitHub"
+5. Select repository: "answub-back"
+6. Settings:
+   - Name: astreon-auth (or whatever you want)
+   - Build Command: npm install
+   - Start Command: node server.js
+7. Click "Create Web Service"
+8. Wait 2-3 minutes for deployment
+9. Done! You'll get a URL like:
+   https://astreon-auth.onrender.com
+
+
+STEP 3: UPDATE C++ CODE
+------------------------
+Change this line in your C++ code:
+
+FROM:
+    AuthClient auth("http://localhost:3000");
+
+TO:
+    AuthClient auth("https://astreon-auth.onrender.com");
+
+(Replace with your actual Render URL)
+
+
+STEP 4: UPDATE FRONTEND (if hosting separately)
+------------------------------------------------
+In frontend/auth.js and frontend/dashboard.js:
+
+Change:
+    const API = 'http://localhost:3000/api';
+
+To:
+    const API = 'https://astreon-auth.onrender.com/api';
+
+
+========================================
+THAT'S IT! YOUR AUTH SYSTEM IS LIVE!
+========================================
+
+Access your dashboard at:
+https://your-app-name.onrender.com
+
+API endpoint:
+https://your-app-name.onrender.com/api
+
