@@ -29,47 +29,40 @@ function initDB() {
 
 // Initialize invites file
 function initInvites() {
+    // Hardcoded random invite codes (8 characters each)
+    const hardcodedInvites = [
+        "8SHD7YCS",
+        "K9X2M8P4",
+        "L5W9T1V6",
+        "A7B3C9D5",
+        "G2H6J4K8",
+        "M3N7P9Q1",
+        "R5S2T8U4",
+        "V6W3X9Y7",
+        "Z1A4B8C2",
+        "D5E9F3G7"
+    ];
+    
     if (!fs.existsSync(INVITES_FILE)) {
-        const defaultInvites = { 
-            invites: [
-                "4NIRIOJEJEOJ",
-                "K9X2M8P4Q7R3",
-                "L5W9T1V6Y8Z2",
-                "A7B3C9D5E1F8",
-                "G2H6J4K8M3N7"
-            ] 
-        };
+        const defaultInvites = { invites: hardcodedInvites };
         fs.writeFileSync(INVITES_FILE, JSON.stringify(defaultInvites, null, 2));
+        console.log(`✅ Initialized ${hardcodedInvites.length} invite codes`);
     } else {
         // Check if file is empty or has no invites
         try {
             const data = fs.readFileSync(INVITES_FILE, 'utf8');
             const invitesData = JSON.parse(data);
             if (!invitesData.invites || invitesData.invites.length === 0) {
-                // File exists but is empty, add default invites
-                const defaultInvites = { 
-                    invites: [
-                        "4NIRIOJEJEOJ",
-                        "K9X2M8P4Q7R3",
-                        "L5W9T1V6Y8Z2",
-                        "A7B3C9D5E1F8",
-                        "G2H6J4K8M3N7"
-                    ] 
-                };
+                // File exists but is empty, use hardcoded invites
+                const defaultInvites = { invites: hardcodedInvites };
                 fs.writeFileSync(INVITES_FILE, JSON.stringify(defaultInvites, null, 2));
+                console.log(`✅ Initialized ${hardcodedInvites.length} invite codes`);
             }
         } catch (error) {
-            // File is corrupted, recreate with defaults
-            const defaultInvites = { 
-                invites: [
-                    "4NIRIOJEJEOJ",
-                    "K9X2M8P4Q7R3",
-                    "L5W9T1V6Y8Z2",
-                    "A7B3C9D5E1F8",
-                    "G2H6J4K8M3N7"
-                ] 
-            };
+            // File is corrupted, create new one with hardcoded invites
+            const defaultInvites = { invites: hardcodedInvites };
             fs.writeFileSync(INVITES_FILE, JSON.stringify(defaultInvites, null, 2));
+            console.log(`✅ Initialized ${hardcodedInvites.length} invite codes`);
         }
     }
 }
@@ -367,10 +360,16 @@ app.post('/api/auth/verify', (req, res) => {
     }
     
     const db = readDB();
+    
+    // Check if database is empty
+    if (!db.users || db.users.length === 0) {
+        return res.json({ success: false, message: 'Database reset. Please login again.' });
+    }
+    
     const user = db.users.find(u => u.token === token);
     
     if (!user) {
-        return res.json({ success: false, message: 'Invalid token' });
+        return res.json({ success: false, message: 'Session expired. Please login again.' });
     }
     
     res.json({ 
@@ -667,10 +666,18 @@ app.get('/api/health', (req, res) => {
 
 // Self-ping to keep server alive (every 14 minutes)
 if (process.env.RENDER) {
+    const https = require('https');
+    const url = process.env.RENDER_EXTERNAL_URL || 'https://answub-back.onrender.com';
+    
+    // Ping immediately on startup
+    https.get(`${url}/api/health`, (res) => {
+        console.log(`[Self-Ping] Initial ping: ${res.statusCode} at ${new Date().toISOString()}`);
+    }).on('error', (err) => {
+        console.error(`[Self-Ping] Initial ping error: ${err.message}`);
+    });
+    
+    // Then ping every 14 minutes
     setInterval(() => {
-        const https = require('https');
-        const url = process.env.RENDER_EXTERNAL_URL || 'https://answub-back.onrender.com';
-        
         https.get(`${url}/api/health`, (res) => {
             console.log(`[Self-Ping] Status: ${res.statusCode} at ${new Date().toISOString()}`);
         }).on('error', (err) => {
