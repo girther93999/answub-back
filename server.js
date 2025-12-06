@@ -30,8 +30,47 @@ function initDB() {
 // Initialize invites file
 function initInvites() {
     if (!fs.existsSync(INVITES_FILE)) {
-        const initialInvites = { invites: [] };
-        fs.writeFileSync(INVITES_FILE, JSON.stringify(initialInvites, null, 2));
+        const defaultInvites = { 
+            invites: [
+                "4NIRIOJEJEOJ",
+                "K9X2M8P4Q7R3",
+                "L5W9T1V6Y8Z2",
+                "A7B3C9D5E1F8",
+                "G2H6J4K8M3N7"
+            ] 
+        };
+        fs.writeFileSync(INVITES_FILE, JSON.stringify(defaultInvites, null, 2));
+    } else {
+        // Check if file is empty or has no invites
+        try {
+            const data = fs.readFileSync(INVITES_FILE, 'utf8');
+            const invitesData = JSON.parse(data);
+            if (!invitesData.invites || invitesData.invites.length === 0) {
+                // File exists but is empty, add default invites
+                const defaultInvites = { 
+                    invites: [
+                        "4NIRIOJEJEOJ",
+                        "K9X2M8P4Q7R3",
+                        "L5W9T1V6Y8Z2",
+                        "A7B3C9D5E1F8",
+                        "G2H6J4K8M3N7"
+                    ] 
+                };
+                fs.writeFileSync(INVITES_FILE, JSON.stringify(defaultInvites, null, 2));
+            }
+        } catch (error) {
+            // File is corrupted, recreate with defaults
+            const defaultInvites = { 
+                invites: [
+                    "4NIRIOJEJEOJ",
+                    "K9X2M8P4Q7R3",
+                    "L5W9T1V6Y8Z2",
+                    "A7B3C9D5E1F8",
+                    "G2H6J4K8M3N7"
+                ] 
+            };
+            fs.writeFileSync(INVITES_FILE, JSON.stringify(defaultInvites, null, 2));
+        }
     }
 }
 
@@ -45,10 +84,13 @@ function readInvites() {
     }
 }
 
-// Check if invite code is valid
+// Check if invite code is valid (case-insensitive)
 function isValidInvite(code) {
+    if (!code || typeof code !== 'string') return false;
     const invitesData = readInvites();
-    return invitesData.invites && invitesData.invites.includes(code);
+    if (!invitesData.invites || !Array.isArray(invitesData.invites)) return false;
+    // Case-insensitive comparison
+    return invitesData.invites.some(invite => invite.toLowerCase() === code.toLowerCase());
 }
 
 function readDB() {
