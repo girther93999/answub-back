@@ -2,6 +2,9 @@
 #include <sstream>
 #include <cstdlib>
 #include <vector>
+#include <algorithm>
+#include <cstring>
+#include <ctime>
 
 #ifdef _WIN32
 
@@ -9,7 +12,6 @@ std::string AuthClient::generateHWID() {
     std::string hwid = "";
     std::vector<std::string> components;
     
-    // Try to get SMBIOS UUID first (most reliable)
     FILE* pipe = _popen("wmic path win32_computersystemproduct get uuid 2>nul", "r");
     if (pipe) {
         char buffer[256];
@@ -30,7 +32,6 @@ std::string AuthClient::generateHWID() {
         }
     }
     
-    // Get BIOS Serial Number
     pipe = _popen("wmic bios get serialnumber 2>nul | findstr /v \"SerialNumber\"", "r");
     if (pipe) {
         char buffer[256];
@@ -47,7 +48,6 @@ std::string AuthClient::generateHWID() {
         }
     }
     
-    // Get CPU Processor ID
     pipe = _popen("wmic cpu get processorid 2>nul | findstr /v \"ProcessorId\"", "r");
     if (pipe) {
         char buffer[256];
@@ -64,7 +64,6 @@ std::string AuthClient::generateHWID() {
         }
     }
     
-    // Get Motherboard Serial Number
     pipe = _popen("wmic baseboard get serialnumber 2>nul | findstr /v \"SerialNumber\"", "r");
     if (pipe) {
         char buffer[256];
@@ -81,31 +80,13 @@ std::string AuthClient::generateHWID() {
         }
     }
     
-    // Get Disk Serial Number
-    pipe = _popen("wmic diskdrive get serialnumber 2>nul | findstr /v \"SerialNumber\"", "r");
-    if (pipe) {
-        char buffer[256];
-        std::string result = "";
-        while (fgets(buffer, sizeof(buffer), pipe) != NULL) {
-            result += buffer;
-        }
-        _pclose(pipe);
-        
-        result.erase(0, result.find_first_not_of(" \t\n\r"));
-        result.erase(result.find_last_not_of(" \t\n\r") + 1);
-        if (!result.empty() && result.length() > 3) {
-            components.push_back("DISK:" + result);
-        }
-    }
-    
-    // Get MAC Address (first active adapter)
     pipe = _popen("wmic nic where \"NetEnabled=true\" get macaddress 2>nul | findstr /v \"MACAddress\" | findstr /v \"^$\"", "r");
     if (pipe) {
         char buffer[256];
         std::string result = "";
         while (fgets(buffer, sizeof(buffer), pipe) != NULL) {
             result += buffer;
-            break; // Just get first one
+            break;
         }
         _pclose(pipe);
         
@@ -116,7 +97,6 @@ std::string AuthClient::generateHWID() {
         }
     }
     
-    // Get Volume Serial Number (C: drive)
     pipe = _popen("vol C: 2>nul | findstr \"Serial\"", "r");
     if (pipe) {
         char buffer[256];
@@ -126,7 +106,6 @@ std::string AuthClient::generateHWID() {
         }
         _pclose(pipe);
         
-        // Extract serial number from "Serial Number is XXXX-XXXX"
         size_t pos = result.find("is ");
         if (pos != std::string::npos) {
             std::string serial = result.substr(pos + 3);
@@ -138,20 +117,16 @@ std::string AuthClient::generateHWID() {
         }
     }
     
-    // Combine all components into one HWID
     if (components.empty()) {
         return "UNKNOWN";
     }
     
-    // Create a hash/combined string from all components
     for (size_t i = 0; i < components.size(); i++) {
         if (i > 0) hwid += "-";
         hwid += components[i];
     }
     
-    // If too long, create a hash
     if (hwid.length() > 200) {
-        // Simple hash - just take first part of each component
         hwid = "";
         for (size_t i = 0; i < components.size() && i < 5; i++) {
             if (i > 0) hwid += "-";
@@ -159,7 +134,6 @@ std::string AuthClient::generateHWID() {
             size_t colon = comp.find(':');
             if (colon != std::string::npos) {
                 std::string value = comp.substr(colon + 1);
-                // Take first 8 chars of value
                 if (value.length() > 8) {
                     value = value.substr(0, 8);
                 }
@@ -174,7 +148,6 @@ std::string AuthClient::generateHWID() {
 }
 
 std::string AuthClient::getLocalIP() {
-    // Get real external/public IP by querying an IP service
     HINTERNET hSession = NULL;
     HINTERNET hConnect = NULL;
     HINTERNET hRequest = NULL;
@@ -188,9 +161,8 @@ std::string AuthClient::getLocalIP() {
         
         if (!hSession) return publicIP;
         
-        WinHttpSetTimeouts(hSession, 10000, 10000, 10000, 10000);
+        WinHttpSetTimeouts(hSession, 8000, 8000, 8000, 8000);
         
-        // Connect to api.ipify.org (returns just the IP as plain text)
         hConnect = WinHttpConnect(hSession, L"api.ipify.org", INTERNET_DEFAULT_HTTPS_PORT, 0);
         if (!hConnect) {
             WinHttpCloseHandle(hSession);
@@ -240,7 +212,6 @@ std::string AuthClient::getLocalIP() {
             }
         } while (bytesRead > 0);
         
-        // Clean up response (trim whitespace)
         if (!response.empty()) {
             response.erase(0, response.find_first_not_of(" \t\n\r"));
             response.erase(response.find_last_not_of(" \t\n\r") + 1);
@@ -261,39 +232,45 @@ std::string AuthClient::getLocalIP() {
 }
 
 std::string AuthClient::makeRequest(const std::string& endpoint, const std::string& jsonBody) {
+    if (!AuthSecurity::TimeValidator::isValidRequest()) {
+        return "ERROR: Invalid request timing";
+    }
+    
+    if (AuthSecurity::AntiHook::checkCriticalFunctions()) {
+        return "ERROR: Security violation detected";
+    }
+    
     HINTERNET hSession = NULL;
     HINTERNET hConnect = NULL;
     HINTERNET hRequest = NULL;
     std::string response;
     
     try {
-        hSession = WinHttpOpen(L"Astreon/1.0",
+        hSession = WinHttpOpen(L"KeyAuth",
             WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
             WINHTTP_NO_PROXY_NAME,
             WINHTTP_NO_PROXY_BYPASS, 0);
         
         if (!hSession) return "ERROR: Failed to init";
         
-        WinHttpSetTimeouts(hSession, 30000, 30000, 30000, 30000);
+        WinHttpSetTimeouts(hSession, 5000, 10000, 10000, 10000);
         
-        // Parse URL
-        std::string url = serverUrl;
+        std::string encKey = KeyAuth::encryption::hash(hwid + localIp);
+        std::string url = KeyAuth::encryption::decrypt(serverUrl, encKey);
         bool isHttps = url.find("https://") == 0;
         std::string host;
         INTERNET_PORT port;
         
         if (isHttps) {
-            url = url.substr(8); // Remove "https://"
+            url = url.substr(8);
             port = INTERNET_DEFAULT_HTTPS_PORT;
         } else if (url.find("http://") == 0) {
-            url = url.substr(7); // Remove "http://"
+            url = url.substr(7);
             port = INTERNET_DEFAULT_HTTP_PORT;
         } else {
-            // No protocol, assume http
             port = INTERNET_DEFAULT_HTTP_PORT;
         }
         
-        // Extract hostname (remove path if present)
         size_t slashPos = url.find('/');
         if (slashPos != std::string::npos) {
             host = url.substr(0, slashPos);
@@ -301,7 +278,6 @@ std::string AuthClient::makeRequest(const std::string& endpoint, const std::stri
             host = url;
         }
         
-        // Check for custom port
         size_t colonPos = host.find(':');
         if (colonPos != std::string::npos) {
             std::string portStr = host.substr(colonPos + 1);
@@ -309,7 +285,6 @@ std::string AuthClient::makeRequest(const std::string& endpoint, const std::stri
             host = host.substr(0, colonPos);
         }
         
-        // Convert hostname to wide string
         std::wstring wHost(host.begin(), host.end());
         
         hConnect = WinHttpConnect(hSession, wHost.c_str(), port, 0);
@@ -350,14 +325,21 @@ std::string AuthClient::makeRequest(const std::string& endpoint, const std::stri
             WinHttpCloseHandle(hRequest);
             WinHttpCloseHandle(hConnect);
             WinHttpCloseHandle(hSession);
-            return "ERROR: Failed to send";
+            return "ERROR: Failed to send request";
         }
         
+        DWORD receiveTimeout = 10000;
+        WinHttpSetOption(hRequest, WINHTTP_OPTION_RECEIVE_TIMEOUT, &receiveTimeout, sizeof(receiveTimeout));
+        
         if (!WinHttpReceiveResponse(hRequest, NULL)) {
+            DWORD error = GetLastError();
             WinHttpCloseHandle(hRequest);
             WinHttpCloseHandle(hConnect);
             WinHttpCloseHandle(hSession);
-            return "ERROR: Failed to receive";
+            if (error == ERROR_WINHTTP_TIMEOUT) {
+                return "ERROR: Request timeout";
+            }
+            return "ERROR: Failed to receive response";
         }
         
         DWORD bytesAvailable, bytesRead;
@@ -393,24 +375,42 @@ std::string AuthClient::getLocalIP() { return "Unknown"; }
 std::string AuthClient::makeRequest(const std::string&, const std::string&) { return "ERROR: Windows only"; }
 #endif
 
-AuthClient::AuthClient(const std::string& url) : serverUrl(url) {
+AuthClient::AuthClient(const std::string& url) : serverUrl(url), isAuthenticated(false) {
     hwid = generateHWID();
     localIp = getLocalIP();
     accountId = "";
     apiToken = "";
+    validatedKey = "";
+    
+    std::string encKey = KeyAuth::encryption::hash(hwid + localIp);
+    serverUrl = KeyAuth::encryption::encrypt(serverUrl, encKey);
+}
+
+AuthClient::~AuthClient() {
 }
 
 void AuthClient::setCredentials(const std::string& accId, const std::string& token) {
-    accountId = accId;
-    apiToken = token;
+    if (AuthSecurity::AntiHook::checkCriticalFunctions()) {
+        return;
+    }
+    
+    std::string encKey = KeyAuth::encryption::hash(hwid + localIp);
+    accountId = KeyAuth::encryption::encrypt(accId, encKey);
+    apiToken = KeyAuth::encryption::encrypt(token, encKey);
+    
+    AuthSecurity::MemoryProtection::secureClear(encKey);
 }
 
 bool AuthClient::checkServer() {
     lastError = "";
     std::string response = makeRequest("api/health", "");
     
-    if (response.find("ERROR:") != std::string::npos) {
-        lastError = response;
+    if (response.empty() || response.find("ERROR:") != std::string::npos) {
+        if (response.empty()) {
+            lastError = "Server timeout or offline";
+        } else {
+            lastError = response;
+        }
         return false;
     }
     
@@ -420,17 +420,42 @@ bool AuthClient::checkServer() {
 bool AuthClient::validateKey(const std::string& key) {
     lastError = "";
     
-    // Send key, HWID, IP, and account credentials to server
+    if (key.empty()) {
+        lastError = "Invalid key";
+        return false;
+    }
+    
+    if (!AuthSecurity::TimeValidator::isValidRequest()) {
+        lastError = "System time tampering detected";
+        return false;
+    }
+    
+    std::string encKey = KeyAuth::encryption::hash(hwid + localIp);
+    std::string decAccountId = KeyAuth::encryption::decrypt(accountId, encKey);
+    std::string decApiToken = KeyAuth::encryption::decrypt(apiToken, encKey);
+    
     std::stringstream json;
     json << "{\"key\":\"" << key << "\",\"hwid\":\"" << hwid << "\",\"ip\":\"" << localIp << "\"";
     
-    if (!accountId.empty() && !apiToken.empty()) {
-        json << ",\"accountId\":\"" << accountId << "\",\"apiToken\":\"" << apiToken << "\"";
+    if (!decAccountId.empty() && !decApiToken.empty()) {
+        json << ",\"accountId\":\"" << decAccountId << "\",\"apiToken\":\"" << decApiToken << "\"";
     }
     
     json << "}";
     
-    std::string response = makeRequest("api/validate", json.str());
+    std::string requestData = json.str();
+    
+    std::string response = makeRequest("api/validate", requestData);
+    
+    AuthSecurity::MemoryProtection::secureClear(decAccountId);
+    AuthSecurity::MemoryProtection::secureClear(decApiToken);
+    AuthSecurity::MemoryProtection::secureClear(encKey);
+    AuthSecurity::MemoryProtection::secureClear(requestData);
+    
+    if (response.empty()) {
+        lastError = "Connection timeout. Server may be offline.";
+        return false;
+    }
     
     if (response.find("ERROR:") != std::string::npos) {
         lastError = response;
@@ -438,10 +463,11 @@ bool AuthClient::validateKey(const std::string& key) {
     }
     
     if (response.find("\"success\":true") != std::string::npos) {
+        isAuthenticated = true;
+        validatedKey = key;
         return true;
     }
     
-    // Extract error message from JSON response
     size_t msgPos = response.find("\"message\":\"");
     if (msgPos != std::string::npos) {
         msgPos += 11;
