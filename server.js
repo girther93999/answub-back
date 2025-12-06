@@ -171,13 +171,20 @@ app.post('/api/auth/register', (req, res) => {
     
     const db = readDB();
     
-    // Check if user exists
-    if (db.users.find(u => u.username.toLowerCase() === username.toLowerCase())) {
-        return res.json({ success: false, message: 'Username already exists' });
+    // Check if username already exists (case-insensitive)
+    const existingUserByUsername = db.users.find(u => 
+        u.username && u.username.toLowerCase() === username.toLowerCase()
+    );
+    if (existingUserByUsername) {
+        return res.json({ success: false, message: 'Username already taken. Please choose a different username.' });
     }
     
-    if (db.users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
-        return res.json({ success: false, message: 'Email already exists' });
+    // Check if email already exists (case-insensitive)
+    const existingUserByEmail = db.users.find(u => 
+        u.email && u.email.toLowerCase() === email.toLowerCase()
+    );
+    if (existingUserByEmail) {
+        return res.json({ success: false, message: 'Email already registered. Please use a different email or login.' });
     }
     
     // Create user
