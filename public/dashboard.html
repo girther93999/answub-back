@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Astreon Auth - Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">ASTREON AUTH</div>
+        <div class="nav-user">
+            <span id="username-display"></span>
+            <button class="btn btn-secondary" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div class="stats-bar">
+        <div class="stat-box">
+            <span class="stat-label">Total</span>
+            <span class="stat-value" id="stat-total">0</span>
+        </div>
+        <div class="stat-box">
+            <span class="stat-label">Active</span>
+            <span class="stat-value" id="stat-active">0</span>
+        </div>
+        <div class="stat-box">
+            <span class="stat-label">Used</span>
+            <span class="stat-value" id="stat-used">0</span>
+        </div>
+        <div class="stat-box">
+            <span class="stat-label">Expired</span>
+            <span class="stat-value" id="stat-expired">0</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Account Credentials Card -->
+        <div class="card credentials-card">
+            <div class="card-header">
+                <h2>Your Account Credentials</h2>
+            </div>
+            <div class="card-body">
+                <p class="credential-info">Use these credentials to integrate with your application</p>
+                <div class="credential-row">
+                    <div class="credential-label">Account ID:</div>
+                    <div class="credential-value">
+                        <code id="account-id"></code>
+                        <button class="btn-icon" onclick="copyCredential('account-id')" title="Copy">📋</button>
+                    </div>
+                </div>
+                <div class="credential-row">
+                    <div class="credential-label">API Token:</div>
+                    <div class="credential-value">
+                        <code id="api-token"></code>
+                        <button class="btn-icon" onclick="copyCredential('api-token')" title="Copy">📋</button>
+                    </div>
+                </div>
+                <div class="credential-row">
+                    <div class="credential-label">Username:</div>
+                    <div class="credential-value">
+                        <code id="account-username"></code>
+                    </div>
+                </div>
+                
+                <div class="integration-guide">
+                    <h3>🔧 Integration Guide</h3>
+                    <p>Add these lines to your C++ code:</p>
+                    <pre><code>// Your Account Credentials
+std::string ACCOUNT_ID = "<span id="code-account-id">YOUR_ACCOUNT_ID</span>";
+std::string API_TOKEN = "<span id="code-api-token">YOUR_API_TOKEN</span>";
+
+// Set credentials (REQUIRED - keys only work with correct account)
+AuthClient auth("http://localhost:3000"); // Change to your server URL when deployed
+auth.setCredentials(ACCOUNT_ID, API_TOKEN);
+
+// Now validate keys (only YOUR keys will work!)
+if (auth.validateKey(userKey)) {
+    std::cout &lt;&lt; "Success!\n";
+}</code></pre>
+                    <p class="warning-text">⚠️ Keys will ONLY work with the account that created them!</p>
+                    <p class="warning-text">🔒 Keys lock to the first computer (HWID) that uses them!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Generator Card -->
+        <div class="card generator-card">
+            <div class="card-header">
+                <h2>Generate License Key</h2>
+            </div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="input-group">
+                        <label>Key Format</label>
+                        <input type="text" id="format" placeholder="ASTREON-****-****" value="KEY-****">
+                        <span class="hint">Use * for random characters</span>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="input-group">
+                        <label>Duration</label>
+                        <select id="duration">
+                            <option value="second">Seconds</option>
+                            <option value="minute">Minutes</option>
+                            <option value="hour">Hours</option>
+                            <option value="day" selected>Days</option>
+                            <option value="month">Months</option>
+                            <option value="lifetime">Lifetime</option>
+                        </select>
+                    </div>
+                    
+                    <div class="input-group" id="amount-group">
+                        <label>Amount</label>
+                        <input type="number" id="amount" min="1" value="30">
+                    </div>
+                </div>
+                
+                <button class="btn btn-generate" onclick="generateKey()">
+                    <span>Generate Key</span>
+                </button>
+                
+                <div id="generated-result" class="result-box" style="display: none;">
+                    <div class="result-header">Key Generated Successfully</div>
+                    <div class="result-key">
+                        <code id="generated-key"></code>
+                        <button class="btn-icon" onclick="copyKey()" title="Copy">
+                            <span>📋</span>
+                        </button>
+                    </div>
+                    <div class="result-info" id="key-info"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Keys Table -->
+        <div class="card table-card">
+            <div class="card-header">
+                <h2>Your License Keys</h2>
+                <button class="btn btn-refresh" onclick="loadKeys()">
+                    <span>🔄 Refresh</span>
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Key</th>
+                                <th>Status</th>
+                                <th>Expires</th>
+                                <th>HWID Lock</th>
+                                <th>IP Address</th>
+                                <th>Created</th>
+                                <th>Last Used</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="keys-table">
+                            <tr><td colspan="8" class="loading">Loading keys...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Add Time -->
+    <div id="addTimeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Time to Key</h3>
+                <button class="modal-close" onclick="closeAddTimeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-key-display">
+                    <code id="modal-key"></code>
+                </div>
+                <div class="form-row">
+                    <div class="input-group">
+                        <label>Duration</label>
+                        <select id="modal-duration">
+                            <option value="second">Seconds</option>
+                            <option value="minute">Minutes</option>
+                            <option value="hour">Hours</option>
+                            <option value="day" selected>Days</option>
+                            <option value="month">Months</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Amount</label>
+                        <input type="number" id="modal-amount" min="1" value="1">
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="addTime()">Add Time</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>

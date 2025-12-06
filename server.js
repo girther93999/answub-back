@@ -16,7 +16,7 @@ const LOCKOUT_TIME = 15 * 60 * 1000; // 15 minutes
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10kb' })); // Limit payload size
-app.use(express.static(path.join(__dirname, '..', 'frontend')));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Initialize database
 function initDB() {

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Astreon Auth - Login</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <h1>ASTREON AUTH</h1>
+            <p class="subtitle">License Key Management System</p>
+            
+            <!-- Login Form -->
+            <div id="login-form" class="auth-form">
+                <h2>Login</h2>
+                <div class="input-group">
+                    <input type="text" id="login-username" placeholder="Username">
+                </div>
+                <div class="input-group">
+                    <input type="password" id="login-password" placeholder="Password">
+                </div>
+                <button class="btn btn-primary" onclick="login()">Login</button>
+                <p class="switch-text">Don't have an account? <a href="#" onclick="showRegister()">Sign up</a></p>
+            </div>
+            
+            <!-- Register Form -->
+            <div id="register-form" class="auth-form" style="display: none;">
+                <h2>Create Account</h2>
+                <div class="input-group">
+                    <input type="text" id="register-username" placeholder="Username">
+                </div>
+                <div class="input-group">
+                    <input type="email" id="register-email" placeholder="Email">
+                </div>
+                <div class="input-group">
+                    <input type="password" id="register-password" placeholder="Password">
+                </div>
+                <button class="btn btn-primary" onclick="register()">Create Account</button>
+                <p class="switch-text">Already have an account? <a href="#" onclick="showLogin()">Login</a></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="auth.js"></script>
+</body>
+</html>
