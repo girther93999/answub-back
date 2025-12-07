@@ -9,7 +9,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const DB_FILE = path.join(__dirname, 'database.json');
 const INVITES_FILE = path.join(__dirname, 'invites.json');
-const MESSAGES_FILE = path.join(__dirname, 'messages.json');
+const UPDATES_DIR = path.join(__dirname, 'updates');
+const ADMIN_USERNAME = 'astreon_admin_2024'; // Hardcoded admin username
+const ADMIN_PASSWORD = 'Astr3on_S3cur3_2024!@#'; // Hardcoded admin password (change this!)
 
 // MongoDB connection string (use environment variable or fallback to local JSON)
 const MONGODB_URI = process.env.MONGODB_URI || null;
@@ -87,14 +89,10 @@ async function initDB() {
     }
 }
 
-// Initialize messages file
-function initMessages() {
-    if (!fs.existsSync(MESSAGES_FILE)) {
-        const initialMessages = {
-            messages: [],
-            lastUpdated: new Date().toISOString()
-        };
-        fs.writeFileSync(MESSAGES_FILE, JSON.stringify(initialMessages, null, 2));
+// Initialize updates directory
+function initUpdatesDir() {
+    if (!fs.existsSync(UPDATES_DIR)) {
+        fs.mkdirSync(UPDATES_DIR, { recursive: true });
     }
 }
 
@@ -285,7 +283,7 @@ function addTimeToKey(expiresAt, duration, amount) {
 (async () => {
     await initDB();
     initInvites();
-    initMessages();
+    initUpdatesDir();
 })();
 
 // AUTH ROUTES
@@ -420,6 +418,23 @@ app.post('/api/auth/login', async (req, res) => {
     }
     
     try {
+        // Check for hardcoded admin account first
+        if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+            // Admin login - return special admin token
+            const adminToken = generateToken();
+            return res.json({
+                success: true,
+                token: adminToken,
+                user: {
+                    id: 'admin',
+                    username: ADMIN_USERNAME,
+                    email: 'admin@astreon.local',
+                    isAdmin: true
+                },
+                isAdmin: true
+            });
+        }
+        
         const db = await readDB();
         const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
         
@@ -1092,6 +1107,102 @@ if (process.env.RENDER) {
     
     console.log('✅ Self-ping enabled - will ping every 14 minutes to keep server alive');
 }
+
+// Admin verification helper
+async function isAdmin(token) {
+    // Check if token matches admin (simple check - in production use proper admin tokens)
+    // For now, we'll check if user is admin by checking if they logged in with admin credentials
+    // This is a simplified check - you should store admin tokens properly
+    try {
+        const db = await readDB();
+        // Admin tokens start with special prefix (we'll generate them specially)
+        // For security, we'll check if username is admin in a stored admin session
+        // For now, simple check: if token is very long and matches pattern
+        return token && token.length > 40; // Admin tokens are longer (this is a placeholder)
+    } catch (error) {
+        return false;
+    }
+}
+
+// Better admin check - verify admin credentials directly
+function verifyAdmin(username, password) {
+    return username === ADMIN_USERNAME && password === ADMIN_PASSWORD;
+}
+
+// FILE UPLOAD ENDPOINTS (Admin Only)
+
+// Upload update file (admin only)
+const multer = require('multer');
+const upload = multer({ 
+    dest: UPDATES_DIR,
+    limits: { fileSize: 100 * 1024 * 1024 } // 100MB max
+});
+
+app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
+    const { username, password } = req.body;
+    
+    // Verify admin
+    if (!verifyAdmin(username, password)) {
+        return res.json({ success: false, message: 'Unauthorized' });
+    }
+    
+    if (!req.file) {
+        return res.json({ success: false, message: 'No file uploaded' });
+    }
+    
+    // Rename file to a standard name
+    const finalPath = path.join(UPDATES_DIR, 'latest.exe');
+    if (fs.existsSync(finalPath)) {
+        fs.unlinkSync(finalPath); // Delete old file
+    }
+    fs.renameSync(req.file.path, finalPath);
+    
+    res.json({ 
+        success: true, 
+        message: 'File uploaded successfully',
+        filename: 'latest.exe',
+        size: req.file.size,
+        uploadedAt: new Date().toISOString()
+    });
+});
+
+// Check for updates (public endpoint for C++ client)
+app.get('/api/updates/check', (req, res) => {
+    const updateFile = path.join(UPDATES_DIR, 'latest.exe');
+    
+    if (fs.existsSync(updateFile)) {
+        const stats = fs.statSync(updateFile);
+        res.json({
+            success: true,
+            hasUpdate: true,
+            filename: 'latest.exe',
+            size: stats.size,
+            modifiedAt: stats.mtime.toISOString(),
+            downloadUrl: '/api/updates/download'
+        });
+    } else {
+        res.json({
+            success: true,
+            hasUpdate: false
+        });
+    }
+});
+
+// Download update file (public endpoint for C++ client)
+app.get('/api/updates/download', (req, res) => {
+    const updateFile = path.join(UPDATES_DIR, 'latest.exe');
+    
+    if (!fs.existsSync(updateFile)) {
+        return res.status(404).json({ success: false, message: 'Update file not found' });
+    }
+    
+    res.download(updateFile, 'update.exe', (err) => {
+        if (err) {
+            console.error('Download error:', err);
+            res.status(500).json({ success: false, message: 'Download failed' });
+        }
+    });
+});
 
 // Cleanup old login attempts every hour
 setInterval(() => {
