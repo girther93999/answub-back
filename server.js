@@ -14,6 +14,7 @@ const UPDATES_DIR = path.join(__dirname, 'updates');
 const UPDATE_INFO_FILE = path.join(__dirname, 'update_info.json');
 const ADMIN_USERNAME = 'K7mP9xQ2vR5wN8bL3jF6hT4'; // Hardcoded admin username
 const ADMIN_PASSWORD = 'X9zA4cM7nB2dG8kY5pV1sW6'; // Hardcoded admin password
+const BOT_API_KEY = process.env.BOT_API_KEY || crypto.createHash('sha256').update(ADMIN_USERNAME + ADMIN_PASSWORD + 'BOT_SECRET_2024').digest('hex'); // Bot-only API key
 
 // MongoDB connection string (use environment variable or fallback to local JSON)
 const MONGODB_URI = process.env.MONGODB_URI || null;
@@ -1382,6 +1383,17 @@ function requireAdmin(req, res, next) {
     next();
 }
 
+// Bot-only middleware (stricter than admin - only bot API key works)
+function requireBot(req, res, next) {
+    const token = req.headers['authorization'] || req.headers['x-bot-api-key'] || req.body.botApiKey || req.query.botApiKey;
+    
+    if (!token || token !== BOT_API_KEY) {
+        return res.json({ success: false, message: 'Unauthorized: Bot API key required' });
+    }
+    
+    next();
+}
+
 // Better admin check - verify admin credentials directly (for file upload)
 function verifyAdmin(username, password) {
     const adminUserEncrypted = Buffer.from(ADMIN_USERNAME).toString('base64');
@@ -1886,8 +1898,8 @@ app.delete('/api/admin/invites/:invite', requireAdmin, async (req, res) => {
     }
 });
 
-// Admin-only key generation (no user account required)
-app.post('/api/admin/keys/generate', requireAdmin, async (req, res) => {
+// Bot-only key generation (no user account required, only bot can access)
+app.post('/api/admin/keys/generate', requireBot, async (req, res) => {
     const { format, duration, amount } = req.body;
     
     if (!format || !format.includes('*')) {
@@ -1939,8 +1951,8 @@ app.post('/api/admin/keys/generate', requireAdmin, async (req, res) => {
     }
 });
 
-// Admin-only key list (all keys)
-app.get('/api/admin/keys', requireAdmin, async (req, res) => {
+// Bot-only key list (all keys, only bot can access)
+app.get('/api/admin/keys', requireBot, async (req, res) => {
     try {
         const db = await readDB();
         res.json({ success: true, keys: db.keys });
