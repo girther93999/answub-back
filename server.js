@@ -10,6 +10,7 @@ const PORT = process.env.PORT || 3000;
 const DB_FILE = path.join(__dirname, 'database.json');
 const INVITES_FILE = path.join(__dirname, 'invites.json');
 const UPDATES_DIR = path.join(__dirname, 'updates');
+const UPDATE_INFO_FILE = path.join(__dirname, 'update_info.json');
 const ADMIN_USERNAME = 'K7mP9xQ2vR5wN8bL3jF6hT4'; // Hardcoded admin username
 const ADMIN_PASSWORD = 'X9zA4cM7nB2dG8kY5pV1sW6'; // Hardcoded admin password
 
@@ -1233,17 +1234,40 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
 app.get('/api/updates/check', (req, res) => {
     try {
         const updateFile = path.join(UPDATES_DIR, 'latest.exe');
+        const clientVersion = req.query.version || '';
         
         if (fs.existsSync(updateFile)) {
+            // Read version info
+            let updateInfo = null;
+            if (fs.existsSync(UPDATE_INFO_FILE)) {
+                try {
+                    updateInfo = JSON.parse(fs.readFileSync(UPDATE_INFO_FILE, 'utf8'));
+                } catch (e) {
+                    console.error('Error reading update info:', e);
+                }
+            }
+            
             const stats = fs.statSync(updateFile);
-            res.json({
-                success: true,
-                hasUpdate: true,
-                filename: 'latest.exe',
-                size: stats.size,
-                modifiedAt: stats.mtime.toISOString(),
-                downloadUrl: '/api/updates/download'
-            });
+            const serverVersion = updateInfo ? updateInfo.version : null;
+            
+            // If client provided version and it matches server version, no update needed
+            if (clientVersion && serverVersion && clientVersion === serverVersion) {
+                res.json({
+                    success: true,
+                    hasUpdate: false,
+                    message: 'Already on latest version'
+                });
+            } else {
+                res.json({
+                    success: true,
+                    hasUpdate: true,
+                    version: serverVersion,
+                    filename: 'latest.exe',
+                    size: stats.size,
+                    modifiedAt: stats.mtime.toISOString(),
+                    downloadUrl: '/api/updates/download'
+                });
+            }
         } else {
             res.json({
                 success: true,
