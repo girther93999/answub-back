@@ -1070,10 +1070,48 @@ app.post('/api/reseller/keys/generate', async (req, res) => {
             return res.json({ success: false, message: `You don't have permission to generate keys for product: ${selectedProduct}` });
         }
         
-        // Check balance (each key costs $1)
-        const keyCost = 1.0;
+        // Calculate key cost based on duration (20% off prices)
+        function calculateKeyCost(duration, amount) {
+            const dur = duration ? duration.toLowerCase() : 'day';
+            const amt = parseInt(amount) || 1;
+            
+            // Lifetime key
+            if (dur === 'lifetime') {
+                return 179.00;
+            }
+            
+            // Day keys
+            if (dur === 'day') {
+                if (amt === 1) return 7.99;
+                if (amt === 3) return 10.00;
+                // For other day amounts, calculate proportionally
+                return 7.99 * amt;
+            }
+            
+            // Week keys
+            if (dur === 'week') {
+                if (amt === 1) return 19.00;
+                return 19.00 * amt;
+            }
+            
+            // Month keys
+            if (dur === 'month') {
+                if (amt === 1) return 45.00;
+                return 45.00 * amt;
+            }
+            
+            // Year keys (if needed)
+            if (dur === 'year') {
+                return 45.00 * 12; // Approximate: 12 months
+            }
+            
+            // Default fallback
+            return 7.99;
+        }
+        
+        const keyCost = calculateKeyCost(duration, amount);
         if (!user.balance || user.balance < keyCost) {
-            return res.json({ success: false, message: `Insufficient balance. You need $${keyCost} to generate a key. Current balance: $${user.balance || 0}` });
+            return res.json({ success: false, message: `Insufficient balance. You need $${keyCost.toFixed(2)} to generate this key. Current balance: $${(user.balance || 0).toFixed(2)}` });
         }
         
         // Deduct balance
