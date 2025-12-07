@@ -137,9 +137,7 @@ async function generateKey() {
             document.getElementById('generated-result').style.display = 'block';
             
             let info = `Duration: ${duration === 'lifetime' ? 'Lifetime' : `${amount} ${duration}(s)`}`;
-            if (data.data.expiresAt) {
-                info += ` | Expires: ${new Date(data.data.expiresAt).toLocaleString()}`;
-            }
+            info += ` | Status: Unused (countdown starts on first use)`;
             document.getElementById('key-info').textContent = info;
             
             loadKeys();
@@ -198,6 +196,17 @@ async function loadKeys() {
                 let status = 'Active';
                 let statusClass = 'status-active';
                 
+                // Check if key has been used
+                const isUnused = !key.usedAt;
+                
+                if (isUnused) {
+                    status = 'Unused';
+                    statusClass = 'status-active';
+                } else if (key.usedBy) {
+                    status = 'Used';
+                    statusClass = 'status-used';
+                }
+                
                 if (key.expiresAt) {
                     const expiry = new Date(key.expiresAt);
                     if (expiry < new Date()) {
@@ -206,14 +215,11 @@ async function loadKeys() {
                     }
                 }
                 
-                if (key.usedBy) {
-                    status = 'Used';
-                    statusClass = 'status-used';
-                }
-                
-                const expiryText = key.expiresAt 
-                    ? new Date(key.expiresAt).toLocaleString() 
-                    : 'Never';
+                const expiryText = isUnused 
+                    ? 'Starts on first use' 
+                    : (key.expiresAt 
+                        ? new Date(key.expiresAt).toLocaleString() 
+                        : 'Lifetime');
                 
                 const ip = key.ip || '-';
                 const lastCheck = key.lastCheck 

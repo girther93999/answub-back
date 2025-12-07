@@ -404,7 +404,8 @@ app.post('/api/keys/generate', (req, res) => {
     }
     
     const key = generateKey(format);
-    const expiresAt = calculateExpiry(duration, parseInt(amount) || 1);
+    // Don't set expiresAt on generation - it will start when first used
+    const expiresAt = null;
     
     const keyEntry = {
         key: key,
@@ -413,7 +414,7 @@ app.post('/api/keys/generate', (req, res) => {
         format: format,
         duration: duration,
         amount: amount,
-        expiresAt: expiresAt,
+        expiresAt: expiresAt, // Will be set on first use
         createdAt: new Date().toISOString(),
         usedBy: null,
         usedAt: null,
@@ -610,11 +611,21 @@ app.post('/api/validate', (req, res) => {
     
     const now = new Date().toISOString();
     
+    // FIRST USE: Start countdown timer when key is first used
+    const isFirstUse = !keyEntry.usedAt;
+    if (isFirstUse && hwid) {
+        // First time use - start expiration countdown NOW
+        if (keyEntry.duration !== 'lifetime') {
+            keyEntry.expiresAt = calculateExpiry(keyEntry.duration, parseInt(keyEntry.amount) || 1);
+        }
+        keyEntry.usedAt = now;
+    }
+    
     // HWID LOCK: Bind key to first HWID that uses it
     if (!keyEntry.hwid && hwid) {
         // First time use - bind to this HWID permanently
         keyEntry.usedBy = hwid;
-        keyEntry.usedAt = now;
+        if (!keyEntry.usedAt) keyEntry.usedAt = now;
         keyEntry.hwid = hwid;
         keyEntry.ip = clientIp;
         keyEntry.hwidLocked = true;
