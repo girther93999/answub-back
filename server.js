@@ -8,6 +8,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const DB_FILE = path.join(__dirname, 'database.json');
 const INVITES_FILE = path.join(__dirname, 'invites.json');
+const MESSAGES_FILE = path.join(__dirname, 'messages.json');
 
 // Rate limiting storage (in-memory)
 const loginAttempts = new Map();
@@ -24,6 +25,17 @@ function initDB() {
     if (!fs.existsSync(DB_FILE)) {
         const initialData = { users: [], keys: [] };
         fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
+    }
+}
+
+// Initialize messages file
+function initMessages() {
+    if (!fs.existsSync(MESSAGES_FILE)) {
+        const initialMessages = {
+            messages: [],
+            lastUpdated: new Date().toISOString()
+        };
+        fs.writeFileSync(MESSAGES_FILE, JSON.stringify(initialMessages, null, 2));
     }
 }
 
