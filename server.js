@@ -10,8 +10,8 @@ const PORT = process.env.PORT || 3000;
 const DB_FILE = path.join(__dirname, 'database.json');
 const INVITES_FILE = path.join(__dirname, 'invites.json');
 const UPDATES_DIR = path.join(__dirname, 'updates');
-const ADMIN_USERNAME = 'nouyfY&*^yfb8'; // Hardcoded admin username
-const ADMIN_PASSWORD = 'nouyfY&*^yfb8'; // Hardcoded admin password
+const ADMIN_USERNAME = 'K7mP9xQ2vR5wN8bL3jF6hT4'; // Hardcoded admin username
+const ADMIN_PASSWORD = 'X9zA4cM7nB2dG8kY5pV1sW6'; // Hardcoded admin password
 
 // MongoDB connection string (use environment variable or fallback to local JSON)
 const MONGODB_URI = process.env.MONGODB_URI || null;
