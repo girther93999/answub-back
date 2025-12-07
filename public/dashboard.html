@@ -4,283 +4,696 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Astreon Auth - Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <nav class="navbar">
-        <div class="nav-brand">Astreon Auth</div>
+        <div class="nav-brand">
+            <div class="nav-logo">
+                <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="#ffffff" stroke-width="3"/>
+                    <path d="M 30 50 L 45 65 L 70 35" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <span class="slide-in-left">Astreon Auth</span>
+        </div>
         <div class="nav-user">
-            <span id="username-display"></span>
-            <button class="btn btn-secondary" onclick="logout()">Logout</button>
+            <div class="user-menu">
+                <button class="user-menu-trigger" onclick="toggleUserMenu()">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="username-display"></span>
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <div class="user-menu-dropdown" id="userMenuDropdown">
+                    <a href="#" onclick="showTab('settings'); toggleUserMenu(); return false;">
+                        <i class="fas fa-cog"></i>
+                        <span>Account Settings</span>
+                    </a>
+                    <a href="#" onclick="logout(); return false;">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Logout</span>
+                    </a>
+                </div>
+            </div>
         </div>
     </nav>
 
-    <div class="stats-bar">
-        <div class="stat-box">
-            <span class="stat-label">Total</span>
-            <span class="stat-value" id="stat-total">0</span>
-        </div>
-        <div class="stat-box">
-            <span class="stat-label">Active</span>
-            <span class="stat-value" id="stat-active">0</span>
-        </div>
-        <div class="stat-box">
-            <span class="stat-label">Used</span>
-            <span class="stat-value" id="stat-used">0</span>
-        </div>
-        <div class="stat-box">
-            <span class="stat-label">Expired</span>
-            <span class="stat-value" id="stat-expired">0</span>
-        </div>
-    </div>
+    <div class="dashboard-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <nav class="sidebar-nav">
+                <button class="nav-item active" onclick="showTab('overview')" data-tab="overview">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Overview</span>
+                </button>
+                <button class="nav-item" onclick="showTab('keys')" data-tab="keys">
+                    <i class="fas fa-key"></i>
+                    <span>Keys</span>
+                </button>
+                <button class="nav-item" onclick="showTab('generate')" data-tab="generate">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Generate</span>
+                </button>
+                <button class="nav-item" onclick="showTab('credentials')" data-tab="credentials">
+                    <i class="fas fa-code"></i>
+                    <span>Integration</span>
+                </button>
+            </nav>
+        </aside>
 
-    <div class="container">
-        <!-- Account Credentials Card -->
-        <div class="card credentials-card">
-            <div class="card-header">
-                <h2>Account Credentials</h2>
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Overview Tab -->
+            <div id="overview-tab" class="tab-content active">
+                <div class="page-header">
+                    <div>
+                        <h1 class="slide-in-left">Dashboard</h1>
+                        <p class="page-subtitle slide-in-left-delay">Welcome back, <span id="overview-username"></span></p>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon-wrapper">
+                            <i class="fas fa-key"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">Total Keys</div>
+                            <div class="stat-value" id="stat-total">0</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon-wrapper success">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">Active</div>
+                            <div class="stat-value" id="stat-active">0</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon-wrapper warning">
+                            <i class="fas fa-unlock"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">Used</div>
+                            <div class="stat-value" id="stat-used">0</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon-wrapper danger">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">Expired</div>
+                            <div class="stat-value" id="stat-expired">0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="quick-actions-section">
+                    <h2 class="section-title">Quick Actions</h2>
+                    <div class="actions-grid">
+                        <button class="action-card" onclick="showTab('generate')">
+                            <div class="action-icon">
+                                <i class="fas fa-plus"></i>
+                            </div>
+                            <div class="action-content">
+                                <div class="action-title">Generate Key</div>
+                                <div class="action-desc">Create a new license key</div>
+                            </div>
+                            <i class="fas fa-chevron-right action-arrow"></i>
+                        </button>
+                        <button class="action-card" onclick="showTab('keys')">
+                            <div class="action-icon">
+                                <i class="fas fa-list"></i>
+                            </div>
+                            <div class="action-content">
+                                <div class="action-title">View Keys</div>
+                                <div class="action-desc">Manage all your keys</div>
+                            </div>
+                            <i class="fas fa-chevron-right action-arrow"></i>
+                        </button>
+                        <button class="action-card" onclick="showTab('credentials')">
+                            <div class="action-icon">
+                                <i class="fas fa-code"></i>
+                            </div>
+                            <div class="action-content">
+                                <div class="action-title">Integration</div>
+                                <div class="action-desc">Get your credentials</div>
+                            </div>
+                            <i class="fas fa-chevron-right action-arrow"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <p class="credential-info">Use these credentials to integrate with your application</p>
-                <div class="credential-row">
-                    <div class="credential-label">Account ID:</div>
-                    <div class="credential-value">
-                        <code id="account-id"></code>
-                        <button class="btn-icon" onclick="copyCredential('account-id')" title="Copy">📋</button>
+
+            <!-- Keys Tab -->
+            <div id="keys-tab" class="tab-content">
+                <div class="page-header">
+                    <div>
+                        <h1>License Keys</h1>
+                        <p class="page-subtitle">Manage and monitor your license keys</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="loadKeys()">
+                        <i class="fas fa-sync-alt"></i>
+                        <span>Refresh</span>
+                    </button>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Key</th>
+                                        <th>Status</th>
+                                        <th>Expires</th>
+                                        <th>HW ID</th>
+                                        <th>IP Address</th>
+                                        <th>Created</th>
+                                        <th>Last Used</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="keys-table">
+                                    <tr><td colspan="8" class="loading">Loading keys...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
-                <div class="credential-row">
-                    <div class="credential-label">API Token:</div>
-                    <div class="credential-value">
-                        <code id="api-token"></code>
-                        <button class="btn-icon" onclick="copyCredential('api-token')" title="Copy">📋</button>
+            </div>
+
+            <!-- Generate Tab -->
+            <div id="generate-tab" class="tab-content">
+                <div class="page-header">
+                    <div>
+                        <h1>Generate Key</h1>
+                        <p class="page-subtitle">Create a new license key for your application</p>
                     </div>
                 </div>
-                <div class="credential-row">
-                    <div class="credential-label">Username:</div>
-                    <div class="credential-value">
-                        <code id="account-username"></code>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="form-section">
+                            <label class="form-label">Key Format</label>
+                            <input type="text" id="format" placeholder="KEY-****" value="KEY-****" class="form-input">
+                            <span class="form-hint">Use * for random characters</span>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-section">
+                                <label class="form-label">Duration</label>
+                                <select id="duration" class="form-input">
+                                    <option value="second">Seconds</option>
+                                    <option value="minute">Minutes</option>
+                                    <option value="hour">Hours</option>
+                                    <option value="day" selected>Days</option>
+                                    <option value="month">Months</option>
+                                    <option value="lifetime">Lifetime</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-section" id="amount-group">
+                                <label class="form-label">Amount</label>
+                                <input type="number" id="amount" min="1" value="30" class="form-input">
+                            </div>
+                        </div>
+                        
+                        <button class="btn btn-primary btn-large" onclick="generateKey()">
+                            <i class="fas fa-key"></i>
+                            <span>Generate Key</span>
+                        </button>
+                        
+                        <div id="generated-result" class="result-box" style="display: none;">
+                            <div class="result-header">
+                                <i class="fas fa-check-circle"></i>
+                                <span>Key Generated Successfully</span>
+                            </div>
+                            <div class="result-key">
+                                <code id="generated-key"></code>
+                                <button class="btn-icon" onclick="copyKey()" title="Copy">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                            <div class="result-info" id="key-info"></div>
+                        </div>
                     </div>
                 </div>
-                
-                <div class="integration-guide">
-                    <h3>🔧 Integration Guide</h3>
-                    <p>Add these lines to your C++ code:</p>
-                    <pre><code>// Your Account Credentials
+            </div>
+
+            <!-- Credentials Tab -->
+            <div id="credentials-tab" class="tab-content">
+                <div class="page-header">
+                    <div>
+                        <h1>Integration</h1>
+                        <p class="page-subtitle">Use these credentials to integrate with your application</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="credentials-list">
+                            <div class="credential-item">
+                                <div class="credential-label">
+                                    <i class="fas fa-id-card"></i>
+                                    <span>Account ID</span>
+                                </div>
+                                <div class="credential-value">
+                                    <code id="account-id"></code>
+                                    <button class="btn-icon" onclick="copyCredential('account-id')" title="Copy">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="credential-item">
+                                <div class="credential-label">
+                                    <i class="fas fa-lock"></i>
+                                    <span>API Token</span>
+                                </div>
+                                <div class="credential-value">
+                                    <code id="api-token"></code>
+                                    <button class="btn-icon" onclick="copyCredential('api-token')" title="Copy">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="credential-item">
+                                <div class="credential-label">
+                                    <i class="fas fa-user"></i>
+                                    <span>Username</span>
+                                </div>
+                                <div class="credential-value">
+                                    <code id="account-username"></code>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="integration-guide">
+                            <h3>
+                                <i class="fas fa-book"></i>
+                                <span>Integration Guide</span>
+                            </h3>
+                            <p>Add these lines to your C++ code:</p>
+                            <div class="code-block">
+                                <div class="code-header">
+                                    <span>C++ Example</span>
+                                    <button class="btn-code-copy" onclick="copyCode('integration-code')">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                                <pre id="integration-code"><code>// Your Account Credentials
 std::string ACCOUNT_ID = "<span id="code-account-id">YOUR_ACCOUNT_ID</span>";
 std::string API_TOKEN = "<span id="code-api-token">YOUR_API_TOKEN</span>";
 
 // Set credentials (REQUIRED - keys only work with correct account)
-AuthClient auth("http://localhost:3000"); // Change to your server URL when deployed
+AuthClient auth("https://answub-back.onrender.com");
 auth.setCredentials(ACCOUNT_ID, API_TOKEN);
 
 // Now validate keys (only YOUR keys will work!)
 if (auth.validateKey(userKey)) {
     std::cout &lt;&lt; "Success!\n";
 }</code></pre>
-                    <p class="warning-text">⚠️ Keys will ONLY work with the account that created them!</p>
-                    <p class="warning-text">🔒 Keys lock to the first computer (HWID) that uses them!</p>
+                            </div>
+                            <div class="info-box">
+                                <i class="fas fa-info-circle"></i>
+                                <div>
+                                    <strong>Important:</strong> Keys will ONLY work with the account that created them. Keys lock to the first computer (HWID) that uses them.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- Generator Card -->
-        <div class="card generator-card">
-            <div class="card-header">
-                <h2>Generate Key</h2>
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Download Files</h2>
+                    </div>
+                    <div class="card-body">
+                        <p class="form-hint" style="margin-bottom: 1.5rem;">Download the required files for integration:</p>
+                        <div class="files-grid">
+                            <div class="file-card">
+                                <div class="file-icon">
+                                    <i class="fas fa-file-code"></i>
+                                </div>
+                                <div class="file-info">
+                                    <div class="file-name">auth_client.h</div>
+                                    <div class="file-desc">Header file with AuthClient class</div>
+                                </div>
+                                <div class="file-actions">
+                                    <button class="btn btn-secondary" onclick="showFile('auth_client.h')" title="View Code">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-primary" onclick="downloadFile('auth_client.h')">
+                                        <i class="fas fa-download"></i>
+                                        <span>Download</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="file-card">
+                                <div class="file-icon">
+                                    <i class="fas fa-file-code"></i>
+                                </div>
+                                <div class="file-info">
+                                    <div class="file-name">auth_client.cpp</div>
+                                    <div class="file-desc">Implementation file</div>
+                                </div>
+                                <div class="file-actions">
+                                    <button class="btn btn-secondary" onclick="showFile('auth_client.cpp')" title="View Code">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-primary" onclick="downloadFile('auth_client.cpp')">
+                                        <i class="fas fa-download"></i>
+                                        <span>Download</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <div class="form-row">
-                    <div class="input-group">
-                        <label>Key Format</label>
-                        <input type="text" id="format" placeholder="ASTREON-****-****" value="KEY-****">
-                        <span class="hint">Use * for random characters</span>
+
+            <!-- Admin Panel (Hidden - only visible to admin) -->
+            <div id="admin-tab" class="tab-content" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1>Admin Panel</h1>
+                        <p class="page-subtitle">Manage users, keys, invites, and updates</p>
                     </div>
                 </div>
-                
-                <div class="form-row">
-                    <div class="input-group">
-                        <label>Duration</label>
-                        <select id="duration">
-                            <option value="second">Seconds</option>
-                            <option value="minute">Minutes</option>
-                            <option value="hour">Hours</option>
-                            <option value="day" selected>Days</option>
-                            <option value="month">Months</option>
-                            <option value="lifetime">Lifetime</option>
-                        </select>
-                    </div>
-                    
-                    <div class="input-group" id="amount-group">
-                        <label>Amount</label>
-                        <input type="number" id="amount" min="1" value="30">
-                    </div>
-                </div>
-                
-                <button class="btn btn-generate" onclick="generateKey()">
-                    <span>Generate Key</span>
-                </button>
-                
-                <div id="generated-result" class="result-box" style="display: none;">
-                    <div class="result-header">Key Generated Successfully</div>
-                    <div class="result-key">
-                        <code id="generated-key"></code>
-                        <button class="btn-icon" onclick="copyKey()" title="Copy">
-                            <span>📋</span>
+
+                <!-- Users Management -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>All Users</h2>
+                        <button class="btn btn-primary" onclick="showCreateUserModal()">
+                            <i class="fas fa-plus"></i>
+                            <span>Create User</span>
                         </button>
                     </div>
-                    <div class="result-info" id="key-info"></div>
+                    <div class="card-body">
+                        <div id="admin-users-list" class="loading">Loading users...</div>
+                    </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- Keys Table -->
-        <div class="card table-card">
-            <div class="card-header">
-                <h2>Keys</h2>
-                <button class="btn btn-secondary" onclick="loadKeys()">Refresh</button>
-            </div>
-            <div class="card-body">
-                <div class="table-wrapper">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Key</th>
-                                <th>Status</th>
-                                <th>Expires</th>
-                                <th>HWID Lock</th>
-                                <th>IP Address</th>
-                                <th>Created</th>
-                                <th>Last Used</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="keys-table">
-                            <tr><td colspan="8" class="loading">Loading keys...</td></tr>
-                        </tbody>
-                    </table>
+                <!-- Resellers Management -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Resellers</h2>
+                        <button class="btn btn-primary" onclick="showCreateResellerModal()">
+                            <i class="fas fa-plus"></i>
+                            <span>Create Reseller</span>
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="admin-resellers-list" class="loading">Loading resellers...</div>
+                    </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- Messages/Announcements Card -->
-        <div class="card messages-card">
-            <div class="card-header">
-                <h2>Messages</h2>
-            </div>
-            <div class="card-body">
-                <p class="credential-info">Send messages to all users that will appear when they validate their keys</p>
-                <div class="form-row">
-                    <div class="input-group" style="flex: 1;">
-                        <label>Title</label>
-                        <input type="text" id="message-title" placeholder="Enter message title">
+                <!-- Invites Management -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Invite Codes</h2>
+                        <button class="btn btn-primary" onclick="generateInvites()">
+                            <i class="fas fa-plus"></i>
+                            <span>Generate Invites</span>
+                        </button>
                     </div>
-                    <div class="input-group" style="flex: 0 0 150px;">
-                        <label>Type</label>
-                        <select id="message-type">
-                            <option value="info">Info</option>
-                            <option value="warning">Warning</option>
-                            <option value="error">Error</option>
-                            <option value="success">Success</option>
-                        </select>
+                    <div class="card-body">
+                        <div id="admin-invites-list" class="loading">Loading invites...</div>
                     </div>
                 </div>
-                <div class="form-row">
-                    <div class="input-group" style="flex: 1;">
-                        <label>Message Content</label>
-                        <textarea id="message-content" rows="4" placeholder="Enter your message..."></textarea>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="input-group" style="flex: 1;">
-                        <label>Expires At (Optional)</label>
-                        <input type="datetime-local" id="message-expires">
-                        <span class="hint">Leave empty for permanent message</span>
-                    </div>
-                </div>
-                <button class="btn btn-generate" onclick="sendMessage()">
-                    <span>Send Message</span>
-                </button>
-                
-                <div id="messages-list" style="margin-top: 2rem;">
-                    <h3 style="color: #888888; margin-bottom: 1rem; font-size: 0.875rem; font-weight: 500;">Active Messages</h3>
-                    <div id="messages-container" class="messages-container">
-                        <div class="loading">Loading messages...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Account Settings Card -->
-        <div class="card settings-card">
-            <div class="card-header">
-                <h2>Account Settings</h2>
-            </div>
-            <div class="card-body">
-                <p class="credential-info">Manage your account information and security</p>
-                
-                <!-- Update Username -->
-                <div class="settings-section">
-                    <h3>Change Username</h3>
-                    <div class="form-row">
-                        <div class="input-group" style="flex: 1;">
-                            <label>New Username</label>
-                            <input type="text" id="new-username" placeholder="Enter new username">
+                <!-- File Upload -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Upload Update</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-section">
+                            <label class="form-label">Version Number</label>
+                            <input type="text" id="update-version" class="form-input" placeholder="e.g., 1.0.0, 2.1.3" required>
+                            <span class="form-hint">Enter a unique version number. Clients will only update if their version differs.</span>
                         </div>
-                        <button class="btn btn-primary" onclick="updateUsername()" style="align-self: flex-end;">Update Username</button>
+                        <div class="form-section" style="margin-top: 1rem;">
+                            <label class="form-label">What's Changed / Update Notes</label>
+                            <textarea id="update-changelog" class="form-input" rows="4" placeholder="e.g., Fixed bugs, Added new features, Performance improvements..." style="resize: vertical; min-height: 80px;"></textarea>
+                            <span class="form-hint">Describe what changed in this update. This will be sent to Discord.</span>
+                        </div>
+                        <div class="form-section" style="margin-top: 1rem;">
+                            <label class="form-label">Select File (.exe)</label>
+                            <input type="file" id="update-file" accept=".exe" class="form-input">
+                            <span class="form-hint">Upload the latest version. Users will auto-update on next launch.</span>
+                        </div>
+                        <button class="btn btn-primary" onclick="uploadUpdate()">
+                            <i class="fas fa-upload"></i>
+                            <span>Upload Update</span>
+                        </button>
+                        <div id="upload-status" style="margin-top: 1rem;"></div>
                     </div>
                 </div>
 
-                <div style="height: 1px; background: #1a1f3a; margin: 1.5rem 0;"></div>
-
-                <!-- Update Email -->
-                <div class="settings-section">
-                    <h3>Change Email</h3>
-                    <div class="form-row">
-                        <div class="input-group" style="flex: 1;">
-                            <label>New Email</label>
-                            <input type="email" id="new-email" placeholder="Enter new email">
-                        </div>
-                        <button class="btn btn-primary" onclick="updateEmail()" style="align-self: flex-end;">Update Email</button>
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Current Version Info</h2>
                     </div>
-                </div>
-
-                <div style="height: 1px; background: #1a1f3a; margin: 1.5rem 0;"></div>
-
-                <!-- Update Password -->
-                <div class="settings-section">
-                    <h3>Change Password</h3>
-                    <div class="form-row" style="flex-direction: column; gap: 1rem;">
-                        <div class="input-group">
-                            <label>Current Password</label>
-                            <input type="password" id="current-password" placeholder="Enter current password">
-                        </div>
-                        <div class="input-group">
-                            <label>New Password</label>
-                            <input type="password" id="new-password" placeholder="Enter new password (min 6 characters)">
-                        </div>
-                        <button class="btn btn-primary" onclick="updatePassword()">Update Password</button>
-                    </div>
-                </div>
-
-                <div style="height: 1px; background: #1a1f3a; margin: 1.5rem 0;"></div>
-
-                <!-- Delete Account -->
-                <div class="settings-section" style="border-left: 3px solid #ef4444; padding-left: 1rem;">
-                    <h3 style="color: #ef4444;">Delete Account</h3>
-                    <p style="color: #8b92a7; font-size: 0.875rem; margin-bottom: 1rem;">
-                        This will permanently delete your account and all your license keys. This action cannot be undone.
-                    </p>
-                    <div class="form-row">
-                        <div class="input-group" style="flex: 1;">
-                            <label>Confirm Password</label>
-                            <input type="password" id="delete-password" placeholder="Enter your password to confirm">
-                        </div>
-                        <button class="btn btn-danger" onclick="deleteAccount()" style="align-self: flex-end;">Delete Account</button>
+                    <div class="card-body">
+                        <div id="update-info" class="loading">Checking...</div>
                     </div>
                 </div>
             </div>
-        </div>
+
+            <!-- User Details Modal -->
+            <div id="userDetailsModal" class="modal">
+                <div class="modal-content" style="max-width: 800px;">
+                    <div class="modal-header">
+                        <h3 id="userDetailsTitle">User Details</h3>
+                        <button class="modal-close" onclick="closeUserDetailsModal()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="userDetailsContent" class="loading">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Create User Modal -->
+            <div id="createUserModal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Create New User</h3>
+                        <button class="modal-close" onclick="closeCreateUserModal()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-section">
+                            <label class="form-label">Account Type</label>
+                            <select id="new-user-account-type" class="form-input" onchange="toggleUserTypeFields()">
+                                <option value="user">Normal User</option>
+                                <option value="reseller">Reseller</option>
+                            </select>
+                        </div>
+                        <div class="form-section">
+                            <label class="form-label">Username</label>
+                            <input type="text" id="new-user-username" placeholder="Enter username" class="form-input">
+                        </div>
+                        <div class="form-section">
+                            <label class="form-label">Email</label>
+                            <input type="email" id="new-user-email" placeholder="Enter email" class="form-input">
+                        </div>
+                        <div class="form-section">
+                            <label class="form-label">Password</label>
+                            <input type="password" id="new-user-password" placeholder="Enter password (min 6 chars)" class="form-input">
+                        </div>
+                        <div id="reseller-fields" style="display: none;">
+                            <div class="form-section">
+                                <label class="form-label">Initial Balance ($)</label>
+                                <input type="number" id="new-user-balance" placeholder="0.00" step="0.01" min="0" value="0" class="form-input">
+                            </div>
+                            <div class="form-section">
+                                <label class="form-label">Allowed Products</label>
+                                <div style="margin-top: 0.5rem;">
+                                    <label style="display: flex; align-items: center; margin-bottom: 0.5rem;">
+                                        <input type="checkbox" id="user-product-private" checked style="margin-right: 0.5rem;">
+                                        <span>Private</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center;">
+                                        <input type="checkbox" id="user-product-public" style="margin-right: 0.5rem;">
+                                        <span>Public (Coming Soon)</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" onclick="createUser()">
+                            <i class="fas fa-user-plus"></i>
+                            <span>Create User</span>
+                        </button>
+                        <div id="create-user-status" style="margin-top: 1rem;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Create Reseller Modal -->
+            <div id="createResellerModal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Create Reseller Account</h3>
+                        <button class="modal-close" onclick="closeCreateResellerModal()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-section">
+                            <label class="form-label">Username</label>
+                            <input type="text" id="new-reseller-username" placeholder="Enter username" class="form-input">
+                        </div>
+                        <div class="form-section">
+                            <label class="form-label">Email</label>
+                            <input type="email" id="new-reseller-email" placeholder="Enter email" class="form-input">
+                        </div>
+                        <div class="form-section">
+                            <label class="form-label">Password</label>
+                            <input type="password" id="new-reseller-password" placeholder="Enter password (min 6 chars)" class="form-input">
+                        </div>
+                        <div class="form-section">
+                            <label class="form-label">Initial Balance ($)</label>
+                            <input type="number" id="new-reseller-balance" placeholder="0.00" step="0.01" min="0" value="0" class="form-input">
+                        </div>
+                        <div class="form-section">
+                            <label class="form-label">Allowed Products</label>
+                            <div style="margin-top: 0.5rem;">
+                                <label style="display: flex; align-items: center; margin-bottom: 0.5rem;">
+                                    <input type="checkbox" id="reseller-product-private" checked style="margin-right: 0.5rem;">
+                                    <span>Private</span>
+                                </label>
+                                <label style="display: flex; align-items: center;">
+                                    <input type="checkbox" id="reseller-product-public" style="margin-right: 0.5rem;">
+                                    <span>Public (Coming Soon)</span>
+                                </label>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" onclick="createReseller()">
+                            <i class="fas fa-user-plus"></i>
+                            <span>Create Reseller</span>
+                        </button>
+                        <div id="create-reseller-status" style="margin-top: 1rem;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manage Reseller Modal -->
+            <div id="manageResellerModal" class="modal">
+                <div class="modal-content" style="max-width: 600px;">
+                    <div class="modal-header">
+                        <h3 id="manage-reseller-title">Manage Reseller</h3>
+                        <button class="modal-close" onclick="closeManageResellerModal()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="manage-reseller-content" class="loading">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="settings-tab" class="tab-content">
+                <div class="page-header">
+                    <div>
+                        <h1>Account Settings</h1>
+                        <p class="page-subtitle">Manage your account information and security</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="settings-section">
+                            <div class="settings-header">
+                                <i class="fas fa-user"></i>
+                                <h3>Change Username</h3>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-section" style="flex: 1;">
+                                    <label class="form-label">New Username</label>
+                                    <input type="text" id="new-username" placeholder="Enter new username" class="form-input">
+                                </div>
+                                <button class="btn btn-primary" onclick="updateUsername()" style="align-self: flex-end;">
+                                    <i class="fas fa-save"></i>
+                                    <span>Update</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="divider"></div>
+
+                        <div class="settings-section">
+                            <div class="settings-header">
+                                <i class="fas fa-envelope"></i>
+                                <h3>Change Email</h3>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-section" style="flex: 1;">
+                                    <label class="form-label">New Email</label>
+                                    <input type="email" id="new-email" placeholder="Enter new email" class="form-input">
+                                </div>
+                                <button class="btn btn-primary" onclick="updateEmail()" style="align-self: flex-end;">
+                                    <i class="fas fa-save"></i>
+                                    <span>Update</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="divider"></div>
+
+                        <div class="settings-section">
+                            <div class="settings-header">
+                                <i class="fas fa-lock"></i>
+                                <h3>Change Password</h3>
+                            </div>
+                            <div class="form-column">
+                                <div class="form-section">
+                                    <label class="form-label">Current Password</label>
+                                    <input type="password" id="current-password" placeholder="Enter current password" class="form-input">
+                                </div>
+                                <div class="form-section">
+                                    <label class="form-label">New Password</label>
+                                    <input type="password" id="new-password" placeholder="Enter new password (min 6 characters)" class="form-input">
+                                </div>
+                                <button class="btn btn-primary" onclick="updatePassword()">
+                                    <i class="fas fa-save"></i>
+                                    <span>Update Password</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="divider"></div>
+
+                        <div class="settings-section danger-zone">
+                            <div class="settings-header">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <h3>Delete Account</h3>
+                            </div>
+                            <p>This will permanently delete your account and all your license keys. This action cannot be undone.</p>
+                            <div class="form-row">
+                                <div class="form-section" style="flex: 1;">
+                                    <label class="form-label">Confirm Password</label>
+                                    <input type="password" id="delete-password" placeholder="Enter your password to confirm" class="form-input">
+                                </div>
+                                <button class="btn btn-danger" onclick="deleteAccount()" style="align-self: flex-end;">
+                                    <i class="fas fa-trash"></i>
+                                    <span>Delete Account</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
 
     <!-- Modal for Add Time -->
@@ -288,16 +701,18 @@ if (auth.validateKey(userKey)) {
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Add Time to Key</h3>
-                <button class="modal-close" onclick="closeAddTimeModal()">&times;</button>
+                <button class="modal-close" onclick="closeAddTimeModal()">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
             <div class="modal-body">
                 <div class="modal-key-display">
                     <code id="modal-key"></code>
                 </div>
                 <div class="form-row">
-                    <div class="input-group">
-                        <label>Duration</label>
-                        <select id="modal-duration">
+                    <div class="form-section">
+                        <label class="form-label">Duration</label>
+                        <select id="modal-duration" class="form-input">
                             <option value="second">Seconds</option>
                             <option value="minute">Minutes</option>
                             <option value="hour">Hours</option>
@@ -305,12 +720,15 @@ if (auth.validateKey(userKey)) {
                             <option value="month">Months</option>
                         </select>
                     </div>
-                    <div class="input-group">
-                        <label>Amount</label>
-                        <input type="number" id="modal-amount" min="1" value="1">
+                    <div class="form-section">
+                        <label class="form-label">Amount</label>
+                        <input type="number" id="modal-amount" min="1" value="1" class="form-input">
                     </div>
                 </div>
-                <button class="btn btn-primary" onclick="addTime()">Add Time</button>
+                <button class="btn btn-primary" onclick="addTime()">
+                    <i class="fas fa-plus"></i>
+                    <span>Add Time</span>
+                </button>
             </div>
         </div>
     </div>
@@ -318,3 +736,4 @@ if (auth.validateKey(userKey)) {
     <script src="dashboard.js"></script>
 </body>
 </html>
+

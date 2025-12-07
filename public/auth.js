@@ -11,12 +11,13 @@ function showLogin() {
 }
 
 async function register() {
+    const inviteCode = document.getElementById('register-invite').value.trim();
     const username = document.getElementById('register-username').value.trim();
     const email = document.getElementById('register-email').value.trim();
     const password = document.getElementById('register-password').value;
     
-    if (!username || !email || !password) {
-        alert('All fields are required');
+    if (!inviteCode || !username || !email || !password) {
+        alert('All fields are required, including invite code');
         return;
     }
     
@@ -29,7 +30,7 @@ async function register() {
         const response = await fetch(`${API}/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, email, password })
+            body: JSON.stringify({ username, email, password, inviteCode })
         });
         
         const data = await response.json();
@@ -37,7 +38,22 @@ async function register() {
         if (data.success) {
             localStorage.setItem('astreon_token', data.token);
             localStorage.setItem('astreon_user', JSON.stringify(data.user));
-            window.location.href = 'dashboard.html';
+            
+            // Backup account data (encrypted/hidden) - only for recovery, not visible on web
+            const backupData = {
+                username: data.user.username,
+                accountId: data.user.id,
+                timestamp: Date.now()
+            };
+            // Store as base64 encoded to hide from casual inspection
+            localStorage.setItem('_astreon_backup', btoa(JSON.stringify(backupData)));
+            
+            // Redirect based on account type
+            if (data.accountType === 'reseller') {
+                window.location.href = 'reseller.html';
+            } else {
+                window.location.href = 'dashboard.html';
+            }
         } else {
             alert(data.message);
         }
@@ -67,12 +83,28 @@ async function login() {
         if (data.success) {
             localStorage.setItem('astreon_token', data.token);
             localStorage.setItem('astreon_user', JSON.stringify(data.user));
-            window.location.href = 'dashboard.html';
+            
+            // Backup account data (encrypted/hidden) - only for recovery, not visible on web
+            const backupData = {
+                username: data.user.username,
+                accountId: data.user.id,
+                timestamp: Date.now()
+            };
+            // Store as base64 encoded to hide from casual inspection
+            localStorage.setItem('_astreon_backup', btoa(JSON.stringify(backupData)));
+            
+            // Redirect based on account type
+            if (data.accountType === 'reseller') {
+                window.location.href = 'reseller.html';
+            } else {
+                window.location.href = 'dashboard.html';
+            }
         } else {
-            alert(data.message);
+            alert('Login failed: ' + (data.message || 'Invalid username or password. Please check your credentials.'));
         }
     } catch (error) {
-        alert('Connection error. Server may be offline.');
+        console.error('Login error:', error);
+        alert('Connection error. Server may be offline. Please check your internet connection and try again.');
     }
 }
 
@@ -106,11 +138,17 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                window.location.href = 'dashboard.html';
+                // Redirect based on account type
+                if (data.accountType === 'reseller') {
+                    window.location.href = 'reseller.html';
+                } else {
+                    window.location.href = 'dashboard.html';
+                }
             } else {
                 // Invalid token, clear it
                 localStorage.removeItem('astreon_token');
                 localStorage.removeItem('astreon_user');
+                // Don't show error - just stay on login page
             }
         })
         .catch(() => {

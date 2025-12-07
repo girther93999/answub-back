@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Astreon Auth - Reseller Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <div class="nav-logo">
+                <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="#ffffff" stroke-width="3"/>
+                    <path d="M 30 50 L 45 65 L 70 35" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <span class="slide-in-left">Astreon Reseller</span>
+        </div>
+        <div class="nav-user">
+            <div class="user-menu">
+                <button class="user-menu-trigger" onclick="toggleUserMenu()">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="username-display"></span>
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <div class="user-menu-dropdown" id="userMenuDropdown">
+                    <a href="#" onclick="logout(); return false;">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Logout</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="dashboard-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <nav class="sidebar-nav">
+                <button class="nav-item active" onclick="showTab('overview')" data-tab="overview">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Overview</span>
+                </button>
+                <button class="nav-item" onclick="showTab('generate')" data-tab="generate">
+                    <i class="fas fa-key"></i>
+                    <span>Generate Keys</span>
+                </button>
+                <button class="nav-item" onclick="showTab('keys')" data-tab="keys">
+                    <i class="fas fa-list"></i>
+                    <span>My Keys</span>
+                </button>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Overview Tab -->
+            <div id="overview-tab" class="tab-content active">
+                <div class="page-header">
+                    <div>
+                        <h1 class="slide-in-left">Reseller Dashboard</h1>
+                        <p class="page-subtitle slide-in-left-delay">Welcome back, <span id="overview-username"></span></p>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon-wrapper" style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);">
+                            <i class="fas fa-dollar-sign"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">Balance</div>
+                            <div class="stat-value" id="stat-balance">$0.00</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon-wrapper">
+                            <i class="fas fa-key"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">Total Keys</div>
+                            <div class="stat-value" id="stat-total">0</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon-wrapper success">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">Active</div>
+                            <div class="stat-value" id="stat-active">0</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon-wrapper warning">
+                            <i class="fas fa-unlock"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">Used</div>
+                            <div class="stat-value" id="stat-used">0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 2rem;">
+                    <div class="card-header">
+                        <h2>Allowed Products</h2>
+                    </div>
+                    <div class="card-body">
+                        <div id="allowed-products" class="loading">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Generate Tab -->
+            <div id="generate-tab" class="tab-content">
+                <div class="page-header">
+                    <div>
+                        <h1>Generate Key</h1>
+                        <p class="page-subtitle">Create a new license key (Cost: $1.00 per key)</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="form-section">
+                            <label class="form-label">Product</label>
+                            <select id="product-select" class="form-input">
+                                <option value="private">Private</option>
+                            </select>
+                            <span class="form-hint">Select the product to generate a key for</span>
+                        </div>
+                        
+                        <div class="form-section">
+                            <label class="form-label">Key Format</label>
+                            <input type="text" id="format" placeholder="Astreon-*****-*****" value="Astreon-*****-*****" class="form-input">
+                            <span class="form-hint">Use * for random characters</span>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-section">
+                                <label class="form-label">Duration</label>
+                                <select id="duration" class="form-input">
+                                    <option value="day" selected>Days</option>
+                                    <option value="week">Weeks</option>
+                                    <option value="month">Months</option>
+                                    <option value="year">Years</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-section" id="amount-group">
+                                <label class="form-label">Amount</label>
+                                <input type="number" id="amount" min="1" value="30" class="form-input">
+                            </div>
+                        </div>
+                        
+                        <div class="info-box" style="margin-bottom: 1.5rem;">
+                            <i class="fas fa-info-circle"></i>
+                            <div>
+                                <strong>Balance:</strong> <span id="generate-balance">$0.00</span> | 
+                                <strong>Cost per key:</strong> $1.00
+                            </div>
+                        </div>
+                        
+                        <button class="btn btn-primary btn-large" onclick="generateResellerKey()">
+                            <i class="fas fa-key"></i>
+                            <span>Generate Key ($1.00)</span>
+                        </button>
+                        
+                        <div id="generated-result" class="result-box" style="display: none;">
+                            <div class="result-header">
+                                <i class="fas fa-check-circle"></i>
+                                <span>Key Generated Successfully</span>
+                            </div>
+                            <div class="result-key">
+                                <code id="generated-key"></code>
+                                <button class="btn-icon" onclick="copyKey()" title="Copy">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                            <div class="result-info" id="key-info"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Keys Tab -->
+            <div id="keys-tab" class="tab-content">
+                <div class="page-header">
+                    <div>
+                        <h1>My Keys</h1>
+                        <p class="page-subtitle">View all keys you've generated</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="loadResellerKeys()">
+                        <i class="fas fa-sync-alt"></i>
+                        <span>Refresh</span>
+                    </button>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Key</th>
+                                        <th>Product</th>
+                                        <th>Status</th>
+                                        <th>Duration</th>
+                                        <th>Created</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="keys-table">
+                                    <tr><td colspan="5" class="loading">Loading keys...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="reseller.js"></script>
+</body>
+</html>
+
