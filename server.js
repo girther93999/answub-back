@@ -1251,17 +1251,32 @@ app.get('/api/updates/check', (req, res) => {
             const serverVersion = updateInfo ? updateInfo.version : null;
             
             // If client provided version and it matches server version, no update needed
-            if (clientVersion && serverVersion && clientVersion === serverVersion) {
+            if (clientVersion && serverVersion && clientVersion.trim() === serverVersion.trim()) {
                 res.json({
                     success: true,
                     hasUpdate: false,
-                    message: 'Already on latest version'
+                    message: 'Already on latest version',
+                    currentVersion: clientVersion,
+                    serverVersion: serverVersion
                 });
-            } else {
+            } else if (serverVersion) {
+                // Update available - return server version
                 res.json({
                     success: true,
                     hasUpdate: true,
                     version: serverVersion,
+                    filename: 'latest.exe',
+                    size: stats.size,
+                    modifiedAt: stats.mtime.toISOString(),
+                    downloadUrl: '/api/updates/download',
+                    currentVersion: clientVersion || 'unknown',
+                    serverVersion: serverVersion
+                });
+            } else {
+                // Update file exists but no version info - still allow update
+                res.json({
+                    success: true,
+                    hasUpdate: true,
                     filename: 'latest.exe',
                     size: stats.size,
                     modifiedAt: stats.mtime.toISOString(),
