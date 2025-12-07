@@ -43,10 +43,16 @@ Your accounts and keys will persist even when the server restarts! No more lost 
    - Click "Save Changes"
    - Redeploy your service
 
-## Example Connection String:
+## Example Connection String Format:
 ```
-mongodb+srv://astreon:YOUR_PASSWORD@cluster0.xxxxx.mongodb.net/astreon?retryWrites=true&w=majority
+mongodb+srv://USERNAME:PASSWORD@cluster0.xxxxx.mongodb.net/DATABASE_NAME?retryWrites=true&w=majority
 ```
+
+**Important:** Replace:
+- `USERNAME` with your database username
+- `PASSWORD` with your database password  
+- `cluster0.xxxxx` with your actual cluster address
+- `DATABASE_NAME` with your database name (e.g., `astreon`)
 
 ## That's it!
 Once you set the `MONGODB_URI` environment variable, all your accounts and keys will be saved to MongoDB and will persist forever, even if the server restarts!
