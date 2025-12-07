@@ -1940,7 +1940,7 @@ app.delete('/api/admin/users/:userId', requireAdmin, async (req, res) => {
 
 // Create user (admin only)
 app.post('/api/admin/users', requireAdmin, async (req, res) => {
-    const { username, email, password } = req.body;
+    const { username, email, password, accountType, initialBalance, allowedProducts } = req.body;
     
     if (!username || !email || !password) {
         return res.json({ success: false, message: 'Username, email, and password required' });
@@ -1956,6 +1956,13 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
     
     if (password.length < 6 || password.length > 100) {
         return res.json({ success: false, message: 'Password must be 6-100 characters' });
+    }
+    
+    // Validate account type
+    const validAccountTypes = ['user', 'reseller'];
+    const selectedAccountType = accountType || 'user';
+    if (!validAccountTypes.includes(selectedAccountType)) {
+        return res.json({ success: false, message: 'Invalid account type' });
     }
     
     try {
@@ -1981,8 +1988,15 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
             createdAt: new Date().toISOString(),
             token: generateToken(),
             failedLogins: 0,
-            lockedUntil: null
+            lockedUntil: null,
+            accountType: selectedAccountType
         };
+        
+        // Add reseller-specific fields if account type is reseller
+        if (selectedAccountType === 'reseller') {
+            userData.balance = parseFloat(initialBalance) || 0;
+            userData.allowedProducts = Array.isArray(allowedProducts) ? allowedProducts : (allowedProducts ? [allowedProducts] : ['private']);
+        }
         
         if (mongoose.connection.readyState === 1) {
             const user = new User(userData);
@@ -1998,7 +2012,10 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
             user: {
                 id: userData.id,
                 username: userData.username,
-                email: userData.email
+                email: userData.email,
+                accountType: userData.accountType,
+                balance: userData.balance,
+                allowedProducts: userData.allowedProducts
             }
         });
     } catch (error) {
