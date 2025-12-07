@@ -1222,25 +1222,25 @@ app.post('/api/validate', async (req, res) => {
             keyEntry.usedAt = now;
         }
         
-        // HWID LOCK: Bind key to first HWID that uses it
+        // HWID LOCK: Bind key to first HWID (CPU ProcessorId) that uses it
         if (!keyEntry.hwid && hwid) {
-            // First time use - bind to this HWID permanently
+            // First time use - bind to this HWID (CPU ProcessorId) permanently
             keyEntry.usedBy = hwid;
             if (!keyEntry.usedAt) keyEntry.usedAt = now;
             keyEntry.hwid = hwid;
             keyEntry.ip = clientIp;
             keyEntry.hwidLocked = true;
         } else if (keyEntry.hwid && hwid && keyEntry.hwid !== hwid) {
-            // HWID MISMATCH - Key is locked to different hardware
+            // HWID MISMATCH - Key is locked to different CPU ProcessorId
             return res.json({ 
                 success: false, 
                 message: 'HWID Lock: This key is bound to a different computer. Contact support to reset HWID.' 
             });
         } else if (!hwid) {
-            // No HWID provided
+            // No HWID (CPU ProcessorId) provided
             return res.json({ 
                 success: false, 
-                message: 'Hardware ID required for validation' 
+                message: 'Hardware ID (CPU ProcessorId) required for validation' 
             });
         }
         
