@@ -1120,7 +1120,6 @@ app.get('/api/health', (req, res) => {
 
 // Self-ping to keep server alive (every 14 minutes)
 if (process.env.RENDER) {
-    const https = require('https');
     const url = process.env.RENDER_EXTERNAL_URL || 'https://answub-back.onrender.com';
     
     // Ping immediately on startup
