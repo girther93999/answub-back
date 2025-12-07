@@ -1285,9 +1285,22 @@ app.get('/api/updates/check', (req, res) => {
                 });
             }
         } else {
+            // No update file - check if we have version info from previous upload
+            let lastVersion = null;
+            if (fs.existsSync(UPDATE_INFO_FILE)) {
+                try {
+                    const updateInfo = JSON.parse(fs.readFileSync(UPDATE_INFO_FILE, 'utf8'));
+                    lastVersion = updateInfo.version;
+                } catch (e) {
+                    // Ignore error
+                }
+            }
+            
             res.json({
                 success: true,
-                hasUpdate: false
+                hasUpdate: false,
+                serverVersion: lastVersion || null,
+                version: lastVersion || null
             });
         }
     } catch (error) {
