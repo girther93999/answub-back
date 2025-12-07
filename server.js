@@ -1123,17 +1123,30 @@ app.delete('/api/keys/:key', async (req, res) => {
     
     try {
         const db = await readDB();
-        const user = db.users.find(u => u.token === token);
         
-        if (!user) {
-            return res.json({ success: false, message: 'Invalid authentication' });
+        // Find key
+        const keyEntry = db.keys.find(k => k.key === keyToDelete);
+        
+        if (!keyEntry) {
+            return res.json({ success: false, message: 'Key not found' });
         }
         
-        // Only delete if key belongs to user
+        // If not admin, check if user owns the key
+        if (!isAdmin) {
+            const user = db.users.find(u => u.token === token);
+            if (!user) {
+                return res.json({ success: false, message: 'Invalid authentication' });
+            }
+            if (keyEntry.userId !== user.id) {
+                return res.json({ success: false, message: 'You do not have permission to delete this key' });
+            }
+        }
+        
+        // Delete key
         if (mongoose.connection.readyState === 1) {
-            await Key.deleteOne({ key: keyToDelete, userId: user.id });
+            await Key.deleteOne({ key: keyToDelete });
         } else {
-            db.keys = db.keys.filter(k => !(k.key === keyToDelete && k.userId === user.id));
+            db.keys = db.keys.filter(k => k.key !== keyToDelete);
             await writeDB(db);
         }
         
