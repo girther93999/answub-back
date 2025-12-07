@@ -1797,13 +1797,27 @@ app.post('/api/admin/invites', requireAdmin, async (req, res) => {
     }
 });
 
-// Delete invite code (admin only) - accepts either hash or plain code
+// Delete invite code (admin only) - accepts either hash, plain code, or hash in query param
 app.delete('/api/admin/invites/:invite', requireAdmin, async (req, res) => {
     const { invite } = req.params;
+    const { hash } = req.query; // Allow hash to be passed as query parameter for "***" codes
     
     try {
-        // Try to delete by hash first, then by plain code (hash it)
-        const inviteHash = invite.length === 64 ? invite : hashInvite(invite);
+        // Determine the hash to delete
+        let inviteHash;
+        if (hash && hash.length === 64) {
+            // Hash provided in query parameter (for "***" codes)
+            inviteHash = hash;
+        } else if (invite.length === 64) {
+            // Invite is already a hash
+            inviteHash = invite;
+        } else if (invite === '***') {
+            // Can't delete "***" without hash - return error
+            return res.json({ success: false, message: 'Cannot delete code. Please use the hash from the invite object.' });
+        } else {
+            // Plain code - hash it
+            inviteHash = hashInvite(invite);
+        }
         
         if (mongoose.connection.readyState === 1) {
             // Delete from MongoDB
@@ -1835,6 +1849,49 @@ app.delete('/api/admin/invites/:invite', requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Delete invite error:', error);
         res.json({ success: false, message: 'Failed to delete invite' });
+    }
+});
+
+// Cleanup old invite codes (admin only) - keeps only specified codes
+app.post('/api/admin/invites/cleanup', requireAdmin, async (req, res) => {
+    const { keepCodes = [] } = req.body; // Array of codes to keep
+    
+    try {
+        if (mongoose.connection.readyState === 1) {
+            // MongoDB cleanup
+            if (keepCodes.length > 0) {
+                const keepHashes = keepCodes.map(code => hashInvite(code));
+                const result = await Invite.deleteMany({ hash: { $nin: keepHashes } });
+                res.json({ success: true, message: `Cleaned up ${result.deletedCount} invite codes`, deleted: result.deletedCount });
+            } else {
+                res.json({ success: false, message: 'No codes specified to keep' });
+            }
+        } else {
+            // JSON file cleanup
+            const invitesData = await readInvites();
+            const existingInvites = invitesData.invites || [];
+            
+            if (keepCodes.length > 0) {
+                const keepHashes = keepCodes.map(code => hashInvite(code));
+                const filteredInvites = existingInvites.filter(i => {
+                    const inviteHash = typeof i === 'string' ? i : i.hash;
+                    return keepHashes.includes(inviteHash);
+                });
+                
+                invitesData.invites = filteredInvites;
+                fs.writeFileSync(INVITES_FILE, JSON.stringify(invitesData, null, 2));
+                res.json({ 
+                    success: true, 
+                    message: `Cleaned up ${existingInvites.length - filteredInvites.length} invite codes`,
+                    deleted: existingInvites.length - filteredInvites.length
+                });
+            } else {
+                res.json({ success: false, message: 'No codes specified to keep' });
+            }
+        }
+    } catch (error) {
+        console.error('Cleanup invites error:', error);
+        res.json({ success: false, message: 'Failed to cleanup invites' });
     }
 });
 
