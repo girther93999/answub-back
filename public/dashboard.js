@@ -549,6 +549,23 @@ function showTab(tabName) {
     }
 }
 
+// Copy to clipboard (for credentials)
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        // Show success notification
+        const notification = document.createElement('div');
+        notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #0d1117; border: 1px solid #3fb950; color: #3fb950; padding: 16px 24px; border-radius: 8px; z-index: 10001; box-shadow: 0 4px 12px rgba(0,0,0,0.3);';
+        notification.innerHTML = '<i class="fas fa-check-circle"></i> Copied to clipboard!';
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 3000);
+    }).catch(() => {
+        alert('Failed to copy. Please select and copy manually.');
+    });
+}
+
 // Copy code to clipboard
 function copyCode(elementId) {
     const codeElement = document.getElementById(elementId);
@@ -907,7 +924,41 @@ async function viewUserDetails(userId) {
                 <p><strong>Email:</strong> ${escapeHtml(data.user.email)}</p>
                 <p><strong>Created:</strong> ${new Date(data.user.createdAt).toLocaleString()}</p>
                 <p><strong>Last Login:</strong> ${data.user.lastLogin === 'Never' ? 'Never' : new Date(data.user.lastLogin).toLocaleString()}</p>
+                ${data.user.accountType ? `<p><strong>Account Type:</strong> ${escapeHtml(data.user.accountType)}</p>` : ''}
+                ${data.user.balance !== undefined ? `<p><strong>Balance:</strong> $${parseFloat(data.user.balance || 0).toFixed(2)}</p>` : ''}
             </div>`;
+            
+            // Admin-only credentials section
+            if (data.user.token) {
+                html += `<div class="user-details-section" style="background: #1a1a1a; border: 1px solid #3fb950; border-radius: 8px; padding: 1.5rem; margin-top: 1.5rem;">
+                    <h4 style="color: #3fb950; margin-bottom: 1rem;">
+                        <i class="fas fa-key"></i> Account Credentials (Admin Only)
+                    </h4>
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: block; color: #888888; font-size: 0.875rem; margin-bottom: 0.5rem;">Account ID</label>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <code style="flex: 1; background: #0d1117; padding: 0.75rem; border-radius: 6px; border: 1px solid #30363d; font-size: 0.875rem; word-break: break-all;">${escapeHtml(data.user.id)}</code>
+                            <button class="btn btn-secondary btn-small" onclick="copyToClipboard('${escapeHtml(data.user.id)}')" title="Copy Account ID">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label style="display: block; color: #888888; font-size: 0.875rem; margin-bottom: 0.5rem;">API Token</label>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <code style="flex: 1; background: #0d1117; padding: 0.75rem; border-radius: 6px; border: 1px solid #30363d; font-size: 0.875rem; word-break: break-all;">${escapeHtml(data.user.token)}</code>
+                            <button class="btn btn-secondary btn-small" onclick="copyToClipboard('${escapeHtml(data.user.token)}')" title="Copy API Token">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div style="margin-top: 1rem; padding: 0.75rem; background: #161b22; border-radius: 6px; border-left: 3px solid #3fb950;">
+                        <p style="color: #888888; font-size: 0.875rem; margin: 0;">
+                            <i class="fas fa-info-circle"></i> Use these credentials to integrate with the authentication system. These are only visible to admins.
+                        </p>
+                    </div>
+                </div>`;
+            }
             
             if (data.keys && data.keys.length > 0) {
                 html += `<div class="user-details-section">
