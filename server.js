@@ -1385,9 +1385,11 @@ function requireAdmin(req, res, next) {
 
 // Bot-only middleware (stricter than admin - only bot API key works)
 function requireBot(req, res, next) {
-    const token = req.headers['authorization'] || req.headers['x-bot-api-key'] || req.body.botApiKey || req.query.botApiKey;
+    // Check X-Bot-Api-Key header first (preferred), then Authorization, then body/query
+    const token = req.headers['x-bot-api-key'] || req.headers['authorization'] || req.body.botApiKey || req.query.botApiKey;
     
     if (!token || token !== BOT_API_KEY) {
+        console.log(`[SECURITY] Bot API key check failed. Provided: ${token ? token.substring(0, 10) + '...' : 'none'}`);
         return res.json({ success: false, message: 'Unauthorized: Bot API key required' });
     }
     
