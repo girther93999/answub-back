@@ -8,7 +8,7 @@
 </head>
 <body>
     <nav class="navbar">
-        <div class="nav-brand">ASTREON AUTH</div>
+        <div class="nav-brand">Astreon Auth</div>
         <div class="nav-user">
             <span id="username-display"></span>
             <button class="btn btn-secondary" onclick="logout()">Logout</button>
@@ -38,7 +38,7 @@
         <!-- Account Credentials Card -->
         <div class="card credentials-card">
             <div class="card-header">
-                <h2>Your Account Credentials</h2>
+                <h2>Account Credentials</h2>
             </div>
             <div class="card-body">
                 <p class="credential-info">Use these credentials to integrate with your application</p>
@@ -87,7 +87,7 @@ if (auth.validateKey(userKey)) {
         <!-- Generator Card -->
         <div class="card generator-card">
             <div class="card-header">
-                <h2>Generate License Key</h2>
+                <h2>Generate Key</h2>
             </div>
             <div class="card-body">
                 <div class="form-row">
@@ -137,10 +137,8 @@ if (auth.validateKey(userKey)) {
         <!-- Keys Table -->
         <div class="card table-card">
             <div class="card-header">
-                <h2>Your License Keys</h2>
-                <button class="btn btn-refresh" onclick="loadKeys()">
-                    <span>🔄 Refresh</span>
-                </button>
+                <h2>Keys</h2>
+                <button class="btn btn-secondary" onclick="loadKeys()">Refresh</button>
             </div>
             <div class="card-body">
                 <div class="table-wrapper">
@@ -168,7 +166,7 @@ if (auth.validateKey(userKey)) {
         <!-- Messages/Announcements Card -->
         <div class="card messages-card">
             <div class="card-header">
-                <h2>📢 Send Message/Announcement</h2>
+                <h2>Messages</h2>
             </div>
             <div class="card-body">
                 <p class="credential-info">Send messages to all users that will appear when they validate their keys</p>
@@ -201,11 +199,11 @@ if (auth.validateKey(userKey)) {
                     </div>
                 </div>
                 <button class="btn btn-generate" onclick="sendMessage()">
-                    <span>📤 Send Message</span>
+                    <span>Send Message</span>
                 </button>
                 
                 <div id="messages-list" style="margin-top: 2rem;">
-                    <h3 style="color: #8b92a7; margin-bottom: 1rem;">Active Messages</h3>
+                    <h3 style="color: #888888; margin-bottom: 1rem; font-size: 0.875rem; font-weight: 500;">Active Messages</h3>
                     <div id="messages-container" class="messages-container">
                         <div class="loading">Loading messages...</div>
                     </div>
@@ -216,7 +214,7 @@ if (auth.validateKey(userKey)) {
         <!-- Account Settings Card -->
         <div class="card settings-card">
             <div class="card-header">
-                <h2>⚙️ Account Settings</h2>
+                <h2>Account Settings</h2>
             </div>
             <div class="card-body">
                 <p class="credential-info">Manage your account information and security</p>
