@@ -14,6 +14,34 @@
 #pragma comment(lib, "iphlpapi.lib")
 #endif
 
+// Key info structure
+struct KeyInfo {
+    std::string duration;
+    std::string amount;
+    std::string expiresAt;
+    std::string timeRemaining;
+    int timeRemainingSeconds;
+    std::string hwid;
+    std::string ip;
+    std::string usedAt;
+    std::string createdAt;
+    bool isValid;
+    
+    KeyInfo() : timeRemainingSeconds(0), isValid(false) {}
+};
+
+// Message structure
+struct Message {
+    std::string id;
+    std::string title;
+    std::string content;
+    std::string type; // info, warning, error, success
+    std::string createdAt;
+    bool isValid;
+    
+    Message() : isValid(false) {}
+};
+
 // KeyAuth-like encryption namespace to confuse reverse engineers
 namespace KeyAuth {
     class encryption {
@@ -230,10 +258,14 @@ private:
     std::string apiToken;
     std::string validatedKey;
     bool isAuthenticated;
+    KeyInfo keyInfo;
+    std::vector<Message> messages;
     
     std::string makeRequest(const std::string& endpoint, const std::string& jsonBody);
     std::string generateHWID();
     std::string getLocalIP();
+    void parseKeyInfo(const std::string& response);
+    void fetchMessages();
     
 public:
     AuthClient(const std::string& url);
@@ -247,4 +279,6 @@ public:
     std::string getHWID() const { return hwid; }
     std::string getIP() const { return localIp; }
     bool getIsAuthenticated() const { return isAuthenticated; }
+    KeyInfo getKeyInfo() const { return keyInfo; }
+    std::vector<Message> getMessages() const { return messages; }
 };

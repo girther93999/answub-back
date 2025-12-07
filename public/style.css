@@ -634,3 +634,77 @@ td code {
         padding: 0 1rem;
     }
 }
+
+/* Messages */
+.messages-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.message-item {
+    background: #1a1f3a;
+    border: 1px solid #252b47;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.message-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.message-header strong {
+    color: #e0e6ed;
+    font-size: 1rem;
+}
+
+.message-content {
+    color: #8b92a7;
+    margin-bottom: 0.75rem;
+    line-height: 1.5;
+}
+
+.message-footer {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.75rem;
+    color: #6b7280;
+    padding-top: 0.5rem;
+    border-top: 1px solid #252b47;
+}
+
+.message-info {
+    border-left: 3px solid #3b82f6;
+}
+
+.message-warning {
+    border-left: 3px solid #f59e0b;
+}
+
+.message-error {
+    border-left: 3px solid #ef4444;
+}
+
+.message-success {
+    border-left: 3px solid #10b981;
+}
+
+textarea {
+    width: 100%;
+    padding: 0.75rem;
+    background: #1a1f3a;
+    border: 1px solid #252b47;
+    border-radius: 6px;
+    color: #e0e6ed;
+    font-family: inherit;
+    font-size: 0.875rem;
+    resize: vertical;
+}
+
+textarea:focus {
+    outline: none;
+    border-color: #667eea;
+}

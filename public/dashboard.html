@@ -164,6 +164,54 @@ if (auth.validateKey(userKey)) {
                 </div>
             </div>
         </div>
+
+        <!-- Messages/Announcements Card -->
+        <div class="card messages-card">
+            <div class="card-header">
+                <h2>📢 Send Message/Announcement</h2>
+            </div>
+            <div class="card-body">
+                <p class="credential-info">Send messages to all users that will appear when they validate their keys</p>
+                <div class="form-row">
+                    <div class="input-group" style="flex: 1;">
+                        <label>Title</label>
+                        <input type="text" id="message-title" placeholder="Enter message title">
+                    </div>
+                    <div class="input-group" style="flex: 0 0 150px;">
+                        <label>Type</label>
+                        <select id="message-type">
+                            <option value="info">Info</option>
+                            <option value="warning">Warning</option>
+                            <option value="error">Error</option>
+                            <option value="success">Success</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="input-group" style="flex: 1;">
+                        <label>Message Content</label>
+                        <textarea id="message-content" rows="4" placeholder="Enter your message..."></textarea>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="input-group" style="flex: 1;">
+                        <label>Expires At (Optional)</label>
+                        <input type="datetime-local" id="message-expires">
+                        <span class="hint">Leave empty for permanent message</span>
+                    </div>
+                </div>
+                <button class="btn btn-generate" onclick="sendMessage()">
+                    <span>📤 Send Message</span>
+                </button>
+                
+                <div id="messages-list" style="margin-top: 2rem;">
+                    <h3 style="color: #8b92a7; margin-bottom: 1rem;">Active Messages</h3>
+                    <div id="messages-container" class="messages-container">
+                        <div class="loading">Loading messages...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Modal for Add Time -->

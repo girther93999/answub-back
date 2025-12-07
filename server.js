@@ -192,6 +192,7 @@ function addTimeToKey(expiresAt, duration, amount) {
 
 initDB();
 initInvites();
+initMessages();
 
 // AUTH ROUTES
 
@@ -649,14 +650,47 @@ app.post('/api/validate', (req, res) => {
     
     writeDB(db);
     
+    // Calculate time remaining
+    let timeRemaining = null;
+    let timeRemainingSeconds = null;
+    if (keyEntry.expiresAt) {
+        const expiry = new Date(keyEntry.expiresAt);
+        const nowDate = new Date();
+        timeRemainingSeconds = Math.max(0, Math.floor((expiry - nowDate) / 1000));
+        
+        if (timeRemainingSeconds > 0) {
+            const days = Math.floor(timeRemainingSeconds / 86400);
+            const hours = Math.floor((timeRemainingSeconds % 86400) / 3600);
+            const minutes = Math.floor((timeRemainingSeconds % 3600) / 60);
+            const seconds = timeRemainingSeconds % 60;
+            
+            if (days > 0) {
+                timeRemaining = `${days}d ${hours}h ${minutes}m`;
+            } else if (hours > 0) {
+                timeRemaining = `${hours}h ${minutes}m ${seconds}s`;
+            } else if (minutes > 0) {
+                timeRemaining = `${minutes}m ${seconds}s`;
+            } else {
+                timeRemaining = `${seconds}s`;
+            }
+        } else {
+            timeRemaining = "Expired";
+        }
+    }
+    
     res.json({ 
         success: true, 
         message: 'Key valid',
         data: {
             duration: keyEntry.duration,
+            amount: keyEntry.amount,
             expiresAt: keyEntry.expiresAt,
+            timeRemaining: timeRemaining,
+            timeRemainingSeconds: timeRemainingSeconds,
             hwid: keyEntry.hwid,
-            ip: keyEntry.ip
+            ip: keyEntry.ip,
+            usedAt: keyEntry.usedAt,
+            createdAt: keyEntry.createdAt
         }
     });
 });

@@ -66,6 +66,9 @@ async function checkAuth() {
         document.getElementById('code-account-id').textContent = currentUser.id;
         document.getElementById('code-api-token').textContent = currentToken;
         
+        // Load messages
+        loadMessages();
+        
         return true;
     } catch (error) {
         console.error('Auth check failed:', error);
