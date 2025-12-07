@@ -59,12 +59,17 @@ const Key = mongoose.model('Key', keySchema);
 
 // Initialize database
 async function initDB() {
+    console.log('🔍 Checking MongoDB connection...');
     if (MONGODB_URI) {
+        console.log('📡 MongoDB URI found, attempting connection...');
         try {
             await mongoose.connect(MONGODB_URI);
             console.log('✅ Connected to MongoDB - Data will persist!');
+            console.log(`📊 Database: ${mongoose.connection.name}`);
+            console.log(`🔗 Connection state: ${mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'}`);
         } catch (error) {
-            console.error('❌ MongoDB connection failed, using JSON fallback:', error.message);
+            console.error('❌ MongoDB connection failed, using JSON fallback');
+            console.error('Error details:', error.message);
             // Fallback to JSON
             if (!fs.existsSync(DB_FILE)) {
                 const initialData = { users: [], keys: [] };
@@ -74,7 +79,7 @@ async function initDB() {
     } else {
         // No MongoDB URI, use JSON file
         console.log('⚠️  No MongoDB URI found, using JSON file (data may not persist on server restart)');
-        console.log('💡 To enable persistent storage, set MONGODB_URI environment variable');
+        console.log('💡 To enable persistent storage, set MONGODB_URI environment variable in Render.com');
         if (!fs.existsSync(DB_FILE)) {
             const initialData = { users: [], keys: [] };
             fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
@@ -358,12 +363,16 @@ app.post('/api/auth/register', async (req, res) => {
         
         if (mongoose.connection.readyState === 1) {
             // Save to MongoDB
+            console.log('💾 Saving user to MongoDB...');
             const user = new User(userData);
             await user.save();
+            console.log(`✅ User saved to MongoDB: ${userData.username} (ID: ${userData.id})`);
         } else {
             // Save to JSON
+            console.log('💾 Saving user to JSON file (MongoDB not connected)...');
             db.users.push(userData);
             await writeDB(db);
+            console.log(`✅ User saved to JSON: ${userData.username}`);
         }
         
         res.json({ 
@@ -749,120 +758,124 @@ app.post('/api/validate', async (req, res) => {
     try {
         const db = await readDB();
         const keyEntry = db.keys.find(k => k.key === key);
-    
-    if (!keyEntry) {
-        return res.json({ success: false, message: 'Invalid key' });
-    }
-    
-    // ACCOUNT VERIFICATION: Check if key belongs to the account
-    if (accountId && apiToken) {
-        // Verify the account exists and token is valid
-        const user = db.users.find(u => u.id === accountId && u.token === apiToken);
         
-        if (!user) {
-            return res.json({ success: false, message: 'Invalid account credentials' });
+        if (!keyEntry) {
+            return res.json({ success: false, message: 'Invalid key' });
         }
         
-        // Check if key belongs to this account
-        if (keyEntry.userId !== accountId) {
-            return res.json({ success: false, message: 'Key does not belong to this account' });
-        }
-    }
-    
-    if (keyEntry.expiresAt) {
-        const expiry = new Date(keyEntry.expiresAt);
-        if (expiry < new Date()) {
-            return res.json({ success: false, message: 'Key expired' });
-        }
-    }
-    
-    const now = new Date().toISOString();
-    
-    // FIRST USE: Start countdown timer when key is first used
-    const isFirstUse = !keyEntry.usedAt;
-    if (isFirstUse && hwid) {
-        // First time use - start expiration countdown NOW
-        if (keyEntry.duration !== 'lifetime') {
-            keyEntry.expiresAt = calculateExpiry(keyEntry.duration, parseInt(keyEntry.amount) || 1);
-        }
-        keyEntry.usedAt = now;
-    }
-    
-    // HWID LOCK: Bind key to first HWID that uses it
-    if (!keyEntry.hwid && hwid) {
-        // First time use - bind to this HWID permanently
-        keyEntry.usedBy = hwid;
-        if (!keyEntry.usedAt) keyEntry.usedAt = now;
-        keyEntry.hwid = hwid;
-        keyEntry.ip = clientIp;
-        keyEntry.hwidLocked = true;
-    } else if (keyEntry.hwid && hwid && keyEntry.hwid !== hwid) {
-        // HWID MISMATCH - Key is locked to different hardware
-        return res.json({ 
-            success: false, 
-            message: 'HWID Lock: This key is bound to a different computer. Contact support to reset HWID.' 
-        });
-    } else if (!hwid) {
-        // No HWID provided
-        return res.json({ 
-            success: false, 
-            message: 'Hardware ID required for validation' 
-        });
-    }
-    
-    // Update last check time
-    keyEntry.lastCheck = now;
-    if (!keyEntry.ip) keyEntry.ip = clientIp;
-    
-    if (mongoose.connection.readyState === 1) {
-        await Key.updateOne({ key: keyEntry.key }, keyEntry);
-    } else {
-        await writeDB(db);
-    }
-    
-    // Calculate time remaining
-    let timeRemaining = null;
-    let timeRemainingSeconds = null;
-    if (keyEntry.expiresAt) {
-        const expiry = new Date(keyEntry.expiresAt);
-        const nowDate = new Date();
-        timeRemainingSeconds = Math.max(0, Math.floor((expiry - nowDate) / 1000));
-        
-        if (timeRemainingSeconds > 0) {
-            const days = Math.floor(timeRemainingSeconds / 86400);
-            const hours = Math.floor((timeRemainingSeconds % 86400) / 3600);
-            const minutes = Math.floor((timeRemainingSeconds % 3600) / 60);
-            const seconds = timeRemainingSeconds % 60;
+        // ACCOUNT VERIFICATION: Check if key belongs to the account
+        if (accountId && apiToken) {
+            // Verify the account exists and token is valid
+            const user = db.users.find(u => u.id === accountId && u.token === apiToken);
             
-            if (days > 0) {
-                timeRemaining = `${days}d ${hours}h ${minutes}m`;
-            } else if (hours > 0) {
-                timeRemaining = `${hours}h ${minutes}m ${seconds}s`;
-            } else if (minutes > 0) {
-                timeRemaining = `${minutes}m ${seconds}s`;
-            } else {
-                timeRemaining = `${seconds}s`;
+            if (!user) {
+                return res.json({ success: false, message: 'Invalid account credentials' });
             }
+            
+            // Check if key belongs to this account
+            if (keyEntry.userId !== accountId) {
+                return res.json({ success: false, message: 'Key does not belong to this account' });
+            }
+        }
+        
+        if (keyEntry.expiresAt) {
+            const expiry = new Date(keyEntry.expiresAt);
+            if (expiry < new Date()) {
+                return res.json({ success: false, message: 'Key expired' });
+            }
+        }
+        
+        const now = new Date().toISOString();
+        
+        // FIRST USE: Start countdown timer when key is first used
+        const isFirstUse = !keyEntry.usedAt;
+        if (isFirstUse && hwid) {
+            // First time use - start expiration countdown NOW
+            if (keyEntry.duration !== 'lifetime') {
+                keyEntry.expiresAt = calculateExpiry(keyEntry.duration, parseInt(keyEntry.amount) || 1);
+            }
+            keyEntry.usedAt = now;
+        }
+        
+        // HWID LOCK: Bind key to first HWID that uses it
+        if (!keyEntry.hwid && hwid) {
+            // First time use - bind to this HWID permanently
+            keyEntry.usedBy = hwid;
+            if (!keyEntry.usedAt) keyEntry.usedAt = now;
+            keyEntry.hwid = hwid;
+            keyEntry.ip = clientIp;
+            keyEntry.hwidLocked = true;
+        } else if (keyEntry.hwid && hwid && keyEntry.hwid !== hwid) {
+            // HWID MISMATCH - Key is locked to different hardware
+            return res.json({ 
+                success: false, 
+                message: 'HWID Lock: This key is bound to a different computer. Contact support to reset HWID.' 
+            });
+        } else if (!hwid) {
+            // No HWID provided
+            return res.json({ 
+                success: false, 
+                message: 'Hardware ID required for validation' 
+            });
+        }
+        
+        // Update last check time
+        keyEntry.lastCheck = now;
+        if (!keyEntry.ip) keyEntry.ip = clientIp;
+        
+        if (mongoose.connection.readyState === 1) {
+            await Key.updateOne({ key: keyEntry.key }, keyEntry);
         } else {
-            timeRemaining = "Expired";
+            await writeDB(db);
         }
+        
+        // Calculate time remaining
+        let timeRemaining = null;
+        let timeRemainingSeconds = null;
+        if (keyEntry.expiresAt) {
+            const expiry = new Date(keyEntry.expiresAt);
+            const nowDate = new Date();
+            timeRemainingSeconds = Math.max(0, Math.floor((expiry - nowDate) / 1000));
+            
+            if (timeRemainingSeconds > 0) {
+                const days = Math.floor(timeRemainingSeconds / 86400);
+                const hours = Math.floor((timeRemainingSeconds % 86400) / 3600);
+                const minutes = Math.floor((timeRemainingSeconds % 3600) / 60);
+                const seconds = timeRemainingSeconds % 60;
+                
+                if (days > 0) {
+                    timeRemaining = `${days}d ${hours}h ${minutes}m`;
+                } else if (hours > 0) {
+                    timeRemaining = `${hours}h ${minutes}m ${seconds}s`;
+                } else if (minutes > 0) {
+                    timeRemaining = `${minutes}m ${seconds}s`;
+                } else {
+                    timeRemaining = `${seconds}s`;
+                }
+            } else {
+                timeRemaining = "Expired";
+            }
+        }
+        
+        res.json({ 
+            success: true, 
+            message: 'Key valid',
+            data: {
+                duration: keyEntry.duration,
+                amount: keyEntry.amount,
+                expiresAt: keyEntry.expiresAt,
+                timeRemaining: timeRemaining,
+                timeRemainingSeconds: timeRemainingSeconds,
+                hwid: keyEntry.hwid,
+                ip: keyEntry.ip,
+                usedAt: keyEntry.usedAt,
+                createdAt: keyEntry.createdAt
+            }
+        });
+    } catch (error) {
+        console.error('Validate error:', error);
+        res.json({ success: false, message: 'Validation failed. Please try again.' });
     }
-    
-    res.json({ 
-        success: true, 
-        message: 'Key valid',
-        data: {
-            duration: keyEntry.duration,
-            amount: keyEntry.amount,
-            expiresAt: keyEntry.expiresAt,
-            timeRemaining: timeRemaining,
-            timeRemainingSeconds: timeRemainingSeconds,
-            hwid: keyEntry.hwid,
-            ip: keyEntry.ip,
-            usedAt: keyEntry.usedAt,
-            createdAt: keyEntry.createdAt
-        }
-    });
 });
 
 // Security headers middleware
