@@ -186,6 +186,60 @@ async function loadResellerKeys() {
     }
 }
 
+// Calculate key cost based on duration (20% off prices)
+function calculateKeyCost(duration, amount) {
+    const dur = duration ? duration.toLowerCase() : 'day';
+    const amt = parseInt(amount) || 1;
+    
+    // Lifetime key
+    if (dur === 'lifetime') {
+        return 179.00;
+    }
+    
+    // Day keys
+    if (dur === 'day') {
+        if (amt === 1) return 7.99;
+        if (amt === 3) return 10.00;
+        // For other day amounts, calculate proportionally
+        return 7.99 * amt;
+    }
+    
+    // Week keys
+    if (dur === 'week') {
+        if (amt === 1) return 19.00;
+        return 19.00 * amt;
+    }
+    
+    // Month keys
+    if (dur === 'month') {
+        if (amt === 1) return 45.00;
+        return 45.00 * amt;
+    }
+    
+    // Year keys (if needed)
+    if (dur === 'year') {
+        return 45.00 * 12; // Approximate: 12 months
+    }
+    
+    // Default fallback
+    return 7.99;
+}
+
+// Update cost display when duration/amount changes
+function updateCostDisplay() {
+    const duration = document.getElementById('duration').value;
+    const amount = document.getElementById('amount').value;
+    const cost = calculateKeyCost(duration, amount);
+    const costDisplay = document.getElementById('key-cost-display');
+    if (costDisplay) {
+        costDisplay.textContent = cost.toFixed(2);
+    }
+    const buttonCost = document.getElementById('button-cost');
+    if (buttonCost) {
+        buttonCost.textContent = `$${cost.toFixed(2)}`;
+    }
+}
+
 // Generate reseller key
 async function generateResellerKey() {
     const format = document.getElementById('format').value;
@@ -198,8 +252,9 @@ async function generateResellerKey() {
         return;
     }
     
-    if (currentBalance < 1.0) {
-        alert(`Insufficient balance. You need $1.00 to generate a key. Current balance: $${currentBalance.toFixed(2)}`);
+    const keyCost = calculateKeyCost(duration, amount);
+    if (currentBalance < keyCost) {
+        alert(`Insufficient balance. You need $${keyCost.toFixed(2)} to generate this key. Current balance: $${currentBalance.toFixed(2)}`);
         return;
     }
     
@@ -280,8 +335,19 @@ function showTab(tabName) {
         loadStats();
     } else if (tabName === 'generate') {
         updateBalanceDisplay();
+        updateCostDisplay();
     }
 }
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', async () => {
+    if (await checkAuth()) {
+        document.getElementById('username-display').textContent = currentUser.username;
+        document.getElementById('overview-username').textContent = currentUser.username;
+        loadStats();
+        updateCostDisplay(); // Initialize cost display
+    }
+});
 
 // User menu toggle
 function toggleUserMenu() {
@@ -326,6 +392,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('username-display').textContent = currentUser.username;
         document.getElementById('overview-username').textContent = currentUser.username;
         loadStats();
+        updateCostDisplay(); // Initialize cost display
     }
 });
 
