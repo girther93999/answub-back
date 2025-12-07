@@ -1231,22 +1231,31 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
 
 // Check for updates (public endpoint for C++ client)
 app.get('/api/updates/check', (req, res) => {
-    const updateFile = path.join(UPDATES_DIR, 'latest.exe');
-    
-    if (fs.existsSync(updateFile)) {
-        const stats = fs.statSync(updateFile);
+    try {
+        const updateFile = path.join(UPDATES_DIR, 'latest.exe');
+        
+        if (fs.existsSync(updateFile)) {
+            const stats = fs.statSync(updateFile);
+            res.json({
+                success: true,
+                hasUpdate: true,
+                filename: 'latest.exe',
+                size: stats.size,
+                modifiedAt: stats.mtime.toISOString(),
+                downloadUrl: '/api/updates/download'
+            });
+        } else {
+            res.json({
+                success: true,
+                hasUpdate: false
+            });
+        }
+    } catch (error) {
+        console.error('Update check error:', error);
         res.json({
-            success: true,
-            hasUpdate: true,
-            filename: 'latest.exe',
-            size: stats.size,
-            modifiedAt: stats.mtime.toISOString(),
-            downloadUrl: '/api/updates/download'
-        });
-    } else {
-        res.json({
-            success: true,
-            hasUpdate: false
+            success: false,
+            hasUpdate: false,
+            error: 'Failed to check for updates'
         });
     }
 });
