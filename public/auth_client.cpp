@@ -13,9 +13,9 @@
 
 std::string AuthClient::generateHWID() {
     std::string hwid = "";
-    std::vector<std::string> components;
     
-    FILE* pipe = _popen("wmic path win32_computersystemproduct get uuid 2>nul", "r");
+    // Get CPU Processor ID using PowerShell
+    FILE* pipe = _popen("powershell -command \"(Get-CimInstance Win32_Processor).ProcessorId\"", "r");
     if (pipe) {
         char buffer[256];
         std::string result = "";
@@ -24,127 +24,18 @@ std::string AuthClient::generateHWID() {
         }
         _pclose(pipe);
         
-        size_t pos = result.find('\n');
-        if (pos != std::string::npos) {
-            std::string line = result.substr(pos + 1);
-            line.erase(0, line.find_first_not_of(" \t\n\r"));
-            line.erase(line.find_last_not_of(" \t\n\r") + 1);
-            if (!line.empty() && line.length() > 10) {
-                components.push_back("UUID:" + line);
-            }
-        }
-    }
-    
-    pipe = _popen("wmic bios get serialnumber 2>nul | findstr /v \"SerialNumber\"", "r");
-    if (pipe) {
-        char buffer[256];
-        std::string result = "";
-        while (fgets(buffer, sizeof(buffer), pipe) != NULL) {
-            result += buffer;
-        }
-        _pclose(pipe);
-        
+        // Trim whitespace
         result.erase(0, result.find_first_not_of(" \t\n\r"));
         result.erase(result.find_last_not_of(" \t\n\r") + 1);
-        if (!result.empty() && result != "To be filled by O.E.M." && result.length() > 3) {
-            components.push_back("BIOS:" + result);
-        }
-    }
-    
-    pipe = _popen("wmic cpu get processorid 2>nul | findstr /v \"ProcessorId\"", "r");
-    if (pipe) {
-        char buffer[256];
-        std::string result = "";
-        while (fgets(buffer, sizeof(buffer), pipe) != NULL) {
-            result += buffer;
-        }
-        _pclose(pipe);
         
-        result.erase(0, result.find_first_not_of(" \t\n\r"));
-        result.erase(result.find_last_not_of(" \t\n\r") + 1);
         if (!result.empty() && result.length() > 5) {
-            components.push_back("CPU:" + result);
+            hwid = result;
         }
     }
     
-    pipe = _popen("wmic baseboard get serialnumber 2>nul | findstr /v \"SerialNumber\"", "r");
-    if (pipe) {
-        char buffer[256];
-        std::string result = "";
-        while (fgets(buffer, sizeof(buffer), pipe) != NULL) {
-            result += buffer;
-        }
-        _pclose(pipe);
-        
-        result.erase(0, result.find_first_not_of(" \t\n\r"));
-        result.erase(result.find_last_not_of(" \t\n\r") + 1);
-        if (!result.empty() && result != "To be filled by O.E.M." && result.length() > 3) {
-            components.push_back("MB:" + result);
-        }
-    }
-    
-    pipe = _popen("wmic nic where \"NetEnabled=true\" get macaddress 2>nul | findstr /v \"MACAddress\" | findstr /v \"^$\"", "r");
-    if (pipe) {
-        char buffer[256];
-        std::string result = "";
-        while (fgets(buffer, sizeof(buffer), pipe) != NULL) {
-            result += buffer;
-            break;
-        }
-        _pclose(pipe);
-        
-        result.erase(0, result.find_first_not_of(" \t\n\r"));
-        result.erase(result.find_last_not_of(" \t\n\r") + 1);
-        if (!result.empty() && result.length() > 10) {
-            components.push_back("MAC:" + result);
-        }
-    }
-    
-    pipe = _popen("vol C: 2>nul | findstr \"Serial\"", "r");
-    if (pipe) {
-        char buffer[256];
-        std::string result = "";
-        while (fgets(buffer, sizeof(buffer), pipe) != NULL) {
-            result += buffer;
-        }
-        _pclose(pipe);
-        
-        size_t pos = result.find("is ");
-        if (pos != std::string::npos) {
-            std::string serial = result.substr(pos + 3);
-            serial.erase(0, serial.find_first_not_of(" \t\n\r"));
-            serial.erase(serial.find_last_not_of(" \t\n\r") + 1);
-            if (!serial.empty()) {
-                components.push_back("VOL:" + serial);
-            }
-        }
-    }
-    
-    if (components.empty()) {
+    // If we couldn't get the ProcessorId, return UNKNOWN
+    if (hwid.empty()) {
         return "UNKNOWN";
-    }
-    
-    for (size_t i = 0; i < components.size(); i++) {
-        if (i > 0) hwid += "-";
-        hwid += components[i];
-    }
-    
-    if (hwid.length() > 200) {
-        hwid = "";
-        for (size_t i = 0; i < components.size() && i < 5; i++) {
-            if (i > 0) hwid += "-";
-            std::string comp = components[i];
-            size_t colon = comp.find(':');
-            if (colon != std::string::npos) {
-                std::string value = comp.substr(colon + 1);
-                if (value.length() > 8) {
-                    value = value.substr(0, 8);
-                }
-                hwid += comp.substr(0, colon + 1) + value;
-            } else {
-                hwid += comp.substr(0, 12);
-            }
-        }
     }
     
     return hwid;
