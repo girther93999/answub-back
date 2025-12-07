@@ -3,12 +3,16 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DB_FILE = path.join(__dirname, 'database.json');
 const INVITES_FILE = path.join(__dirname, 'invites.json');
 const MESSAGES_FILE = path.join(__dirname, 'messages.json');
+
+// MongoDB connection string (use environment variable or fallback to local JSON)
+const MONGODB_URI = process.env.MONGODB_URI || null;
 
 // Rate limiting storage (in-memory)
 const loginAttempts = new Map();
@@ -20,11 +24,61 @@ app.use(cors());
 app.use(express.json({ limit: '10kb' })); // Limit payload size
 app.use(express.static(path.join(__dirname, 'public')));
 
+// MongoDB Schemas
+const userSchema = new mongoose.Schema({
+    id: { type: String, required: true, unique: true },
+    username: { type: String, required: true },
+    email: { type: String, required: true },
+    password: { type: String, required: true },
+    token: { type: String, required: true },
+    createdAt: { type: String, required: true },
+    lastLogin: String,
+    failedLogins: { type: Number, default: 0 },
+    lockedUntil: String
+});
+
+const keySchema = new mongoose.Schema({
+    key: { type: String, required: true, unique: true },
+    userId: { type: String, required: true },
+    username: { type: String, required: true },
+    format: String,
+    duration: String,
+    amount: String,
+    expiresAt: String,
+    createdAt: { type: String, required: true },
+    usedBy: String,
+    usedAt: String,
+    hwid: String,
+    ip: String,
+    lastCheck: String,
+    hwidLocked: Boolean
+});
+
+const User = mongoose.model('User', userSchema);
+const Key = mongoose.model('Key', keySchema);
+
 // Initialize database
-function initDB() {
-    if (!fs.existsSync(DB_FILE)) {
-        const initialData = { users: [], keys: [] };
-        fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
+async function initDB() {
+    if (MONGODB_URI) {
+        try {
+            await mongoose.connect(MONGODB_URI);
+            console.log('✅ Connected to MongoDB - Data will persist!');
+        } catch (error) {
+            console.error('❌ MongoDB connection failed, using JSON fallback:', error.message);
+            // Fallback to JSON
+            if (!fs.existsSync(DB_FILE)) {
+                const initialData = { users: [], keys: [] };
+                fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
+            }
+        }
+    } else {
+        // No MongoDB URI, use JSON file
+        console.log('⚠️  No MongoDB URI found, using JSON file (data may not persist on server restart)');
+        console.log('💡 To enable persistent storage, set MONGODB_URI environment variable');
+        if (!fs.existsSync(DB_FILE)) {
+            const initialData = { users: [], keys: [] };
+            fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
+        }
     }
 }
 
@@ -98,17 +152,37 @@ function isValidInvite(code) {
     return invitesData.invites.some(invite => invite.toLowerCase() === code.toLowerCase());
 }
 
-function readDB() {
-    try {
-        const data = fs.readFileSync(DB_FILE, 'utf8');
-        return JSON.parse(data);
-    } catch (error) {
-        return { users: [], keys: [] };
+async function readDB() {
+    if (mongoose.connection.readyState === 1) {
+        // Using MongoDB
+        try {
+            const users = await User.find({}).lean();
+            const keys = await Key.find({}).lean();
+            return { users, keys };
+        } catch (error) {
+            console.error('MongoDB read error:', error);
+            return { users: [], keys: [] };
+        }
+    } else {
+        // Fallback to JSON
+        try {
+            const data = fs.readFileSync(DB_FILE, 'utf8');
+            return JSON.parse(data);
+        } catch (error) {
+            return { users: [], keys: [] };
+        }
     }
 }
 
-function writeDB(data) {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+async function writeDB(data) {
+    if (mongoose.connection.readyState === 1) {
+        // Using MongoDB - data is already saved via model operations
+        // This function is kept for compatibility but MongoDB saves automatically
+        return;
+    } else {
+        // Fallback to JSON
+        fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+    }
 }
 
 // Hash password
@@ -202,9 +276,12 @@ function addTimeToKey(expiresAt, duration, amount) {
     return newExpiry.toISOString();
 }
 
-initDB();
-initInvites();
-initMessages();
+// Initialize everything (async)
+(async () => {
+    await initDB();
+    initInvites();
+    initMessages();
+})();
 
 // AUTH ROUTES
 
@@ -223,7 +300,7 @@ function validateEmail(email) {
 }
 
 // Register
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
     const { username, email, password, inviteCode } = req.body;
     
     // Input validation
@@ -248,53 +325,65 @@ app.post('/api/auth/register', (req, res) => {
         return res.json({ success: false, message: 'Password must be 6-100 characters' });
     }
     
-    const db = readDB();
-    
-    // Check if username already exists (case-insensitive)
-    const existingUserByUsername = db.users.find(u => 
-        u.username && u.username.toLowerCase() === username.toLowerCase()
-    );
-    if (existingUserByUsername) {
-        return res.json({ success: false, message: 'Username already taken. Please choose a different username.' });
-    }
-    
-    // Check if email already exists (case-insensitive)
-    const existingUserByEmail = db.users.find(u => 
-        u.email && u.email.toLowerCase() === email.toLowerCase()
-    );
-    if (existingUserByEmail) {
-        return res.json({ success: false, message: 'Email already registered. Please use a different email or login.' });
-    }
-    
-    // Create user
-    const user = {
-        id: crypto.randomBytes(16).toString('hex'),
-        username: username,
-        email: email,
-        password: hashPassword(password),
-        createdAt: new Date().toISOString(),
-        token: generateToken(),
-        failedLogins: 0,
-        lockedUntil: null
-    };
-    
-    db.users.push(user);
-    writeDB(db);
-    
-    res.json({ 
-        success: true, 
-        message: 'Account created',
-        token: user.token,
-        user: {
-            id: user.id,
-            username: user.username,
-            email: user.email
+    try {
+        const db = await readDB();
+        
+        // Check if username already exists (case-insensitive)
+        const existingUserByUsername = db.users.find(u => 
+            u.username && u.username.toLowerCase() === username.toLowerCase()
+        );
+        if (existingUserByUsername) {
+            return res.json({ success: false, message: 'Username already taken. Please choose a different username.' });
         }
-    });
+        
+        // Check if email already exists (case-insensitive)
+        const existingUserByEmail = db.users.find(u => 
+            u.email && u.email.toLowerCase() === email.toLowerCase()
+        );
+        if (existingUserByEmail) {
+            return res.json({ success: false, message: 'Email already registered. Please use a different email or login.' });
+        }
+        
+        // Create user
+        const userData = {
+            id: crypto.randomBytes(16).toString('hex'),
+            username: username,
+            email: email,
+            password: hashPassword(password),
+            createdAt: new Date().toISOString(),
+            token: generateToken(),
+            failedLogins: 0,
+            lockedUntil: null
+        };
+        
+        if (mongoose.connection.readyState === 1) {
+            // Save to MongoDB
+            const user = new User(userData);
+            await user.save();
+        } else {
+            // Save to JSON
+            db.users.push(userData);
+            await writeDB(db);
+        }
+        
+        res.json({ 
+            success: true, 
+            message: 'Account created',
+            token: userData.token,
+            user: {
+                id: userData.id,
+                username: userData.username,
+                email: userData.email
+            }
+        });
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.json({ success: false, message: 'Registration failed. Please try again.' });
+    }
 });
 
 // Login with rate limiting
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
     const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
     
@@ -321,235 +410,290 @@ app.post('/api/auth/login', (req, res) => {
         });
     }
     
-    const db = readDB();
-    const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
-    
-    if (!user || user.password !== hashPassword(password)) {
-        // Increment failed attempts
-        attempts.count++;
-        attempts.firstAttempt = attempts.firstAttempt || Date.now();
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
         
-        if (attempts.count >= MAX_LOGIN_ATTEMPTS) {
-            attempts.lockedUntil = Date.now() + LOCKOUT_TIME;
+        if (!user || user.password !== hashPassword(password)) {
+            // Increment failed attempts
+            attempts.count++;
+            attempts.firstAttempt = attempts.firstAttempt || Date.now();
+            
+            if (attempts.count >= MAX_LOGIN_ATTEMPTS) {
+                attempts.lockedUntil = Date.now() + LOCKOUT_TIME;
+                loginAttempts.set(attemptKey, attempts);
+                return res.json({ 
+                    success: false, 
+                    message: 'Too many failed attempts. Account locked for 15 minutes.' 
+                });
+            }
+            
             loginAttempts.set(attemptKey, attempts);
             return res.json({ 
                 success: false, 
-                message: 'Too many failed attempts. Account locked for 15 minutes.' 
+                message: `Invalid username or password. ${MAX_LOGIN_ATTEMPTS - attempts.count} attempts remaining.` 
             });
         }
         
-        loginAttempts.set(attemptKey, attempts);
-        return res.json({ 
-            success: false, 
-            message: `Invalid username or password. ${MAX_LOGIN_ATTEMPTS - attempts.count} attempts remaining.` 
-        });
-    }
-    
-    // Successful login - clear attempts
-    loginAttempts.delete(attemptKey);
-    
-    // Generate new token
-    user.token = generateToken();
-    user.lastLogin = new Date().toISOString();
-    writeDB(db);
-    
-    res.json({ 
-        success: true,
-        token: user.token,
-        user: {
-            id: user.id,
-            username: user.username,
-            email: user.email
+        // Successful login - clear attempts
+        loginAttempts.delete(attemptKey);
+        
+        // Generate new token
+        user.token = generateToken();
+        user.lastLogin = new Date().toISOString();
+        
+        if (mongoose.connection.readyState === 1) {
+            await User.updateOne({ id: user.id }, { token: user.token, lastLogin: user.lastLogin });
+        } else {
+            await writeDB(db);
         }
-    });
+        
+        res.json({ 
+            success: true,
+            token: user.token,
+            user: {
+                id: user.id,
+                username: user.username,
+                email: user.email
+            }
+        });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.json({ success: false, message: 'Login failed. Please try again.' });
+    }
 });
 
 // Verify token
-app.post('/api/auth/verify', (req, res) => {
+app.post('/api/auth/verify', async (req, res) => {
     const { token } = req.body;
     
     if (!token) {
         return res.json({ success: false, message: 'Token required' });
     }
     
-    const db = readDB();
-    
-    // Check if database is empty
-    if (!db.users || db.users.length === 0) {
-        return res.json({ success: false, message: 'Database reset. Please login again.' });
-    }
-    
-    const user = db.users.find(u => u.token === token);
-    
-    if (!user) {
-        return res.json({ success: false, message: 'Session expired. Please login again.' });
-    }
-    
-    res.json({ 
-        success: true,
-        user: {
-            id: user.id,
-            username: user.username,
-            email: user.email
+    try {
+        const db = await readDB();
+        
+        // Check if database is empty
+        if (!db.users || db.users.length === 0) {
+            return res.json({ success: false, message: 'Database reset. Please login again.' });
         }
-    });
+        
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Session expired. Please login again.' });
+        }
+        
+        res.json({ 
+            success: true,
+            user: {
+                id: user.id,
+                username: user.username,
+                email: user.email
+            }
+        });
+    } catch (error) {
+        console.error('Verify error:', error);
+        res.json({ success: false, message: 'Verification failed. Please try again.' });
+    }
 });
 
 // KEY MANAGEMENT ROUTES
 
 // Generate key
-app.post('/api/keys/generate', (req, res) => {
+app.post('/api/keys/generate', async (req, res) => {
     const { token, format, duration, amount } = req.body;
     
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
     
-    const db = readDB();
-    const user = db.users.find(u => u.token === token);
-    
-    if (!user) {
-        return res.json({ success: false, message: 'Invalid authentication' });
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        if (!format || !format.includes('*')) {
+            return res.json({ success: false, message: 'Invalid format' });
+        }
+        
+        const key = generateKey(format);
+        // Don't set expiresAt on generation - it will start when first used
+        const expiresAt = null;
+        
+        const keyEntry = {
+            key: key,
+            userId: user.id,
+            username: user.username,
+            format: format,
+            duration: duration,
+            amount: amount,
+            expiresAt: expiresAt, // Will be set on first use
+            createdAt: new Date().toISOString(),
+            usedBy: null,
+            usedAt: null,
+            hwid: null,
+            ip: null,
+            lastCheck: null
+        };
+        
+        if (mongoose.connection.readyState === 1) {
+            const keyDoc = new Key(keyEntry);
+            await keyDoc.save();
+        } else {
+            db.keys.push(keyEntry);
+            await writeDB(db);
+        }
+        
+        res.json({ success: true, key: key, data: keyEntry });
+    } catch (error) {
+        console.error('Generate key error:', error);
+        res.json({ success: false, message: 'Failed to generate key. Please try again.' });
     }
-    
-    if (!format || !format.includes('*')) {
-        return res.json({ success: false, message: 'Invalid format' });
-    }
-    
-    const key = generateKey(format);
-    // Don't set expiresAt on generation - it will start when first used
-    const expiresAt = null;
-    
-    const keyEntry = {
-        key: key,
-        userId: user.id,
-        username: user.username,
-        format: format,
-        duration: duration,
-        amount: amount,
-        expiresAt: expiresAt, // Will be set on first use
-        createdAt: new Date().toISOString(),
-        usedBy: null,
-        usedAt: null,
-        hwid: null,
-        ip: null,
-        lastCheck: null
-    };
-    
-    db.keys.push(keyEntry);
-    writeDB(db);
-    
-    res.json({ success: true, key: key, data: keyEntry });
 });
 
 // Get user's keys
-app.post('/api/keys/list', (req, res) => {
+app.post('/api/keys/list', async (req, res) => {
     const { token } = req.body;
     
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
     
-    const db = readDB();
-    const user = db.users.find(u => u.token === token);
-    
-    if (!user) {
-        return res.json({ success: false, message: 'Invalid authentication' });
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        // Get only this user's keys
+        const userKeys = db.keys.filter(k => k.userId === user.id);
+        
+        res.json({ success: true, keys: userKeys });
+    } catch (error) {
+        console.error('List keys error:', error);
+        res.json({ success: false, message: 'Failed to load keys. Please try again.' });
     }
-    
-    // Get only this user's keys
-    const userKeys = db.keys.filter(k => k.userId === user.id);
-    
-    res.json({ success: true, keys: userKeys });
 });
 
 // Get stats for user
-app.post('/api/keys/stats', (req, res) => {
+app.post('/api/keys/stats', async (req, res) => {
     const { token } = req.body;
     
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
     
-    const db = readDB();
-    const user = db.users.find(u => u.token === token);
-    
-    if (!user) {
-        return res.json({ success: false, message: 'Invalid authentication' });
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        const userKeys = db.keys.filter(k => k.userId === user.id);
+        const now = new Date();
+        
+        const total = userKeys.length;
+        const active = userKeys.filter(k => !k.expiresAt || new Date(k.expiresAt) > now).length;
+        const expired = userKeys.filter(k => k.expiresAt && new Date(k.expiresAt) < now).length;
+        const used = userKeys.filter(k => k.usedBy).length;
+        const unused = total - used;
+        
+        res.json({
+            success: true,
+            stats: { total, active, expired, used, unused }
+        });
+    } catch (error) {
+        console.error('Stats error:', error);
+        res.json({ success: false, message: 'Failed to load stats. Please try again.' });
     }
-    
-    const userKeys = db.keys.filter(k => k.userId === user.id);
-    const now = new Date();
-    
-    const total = userKeys.length;
-    const active = userKeys.filter(k => !k.expiresAt || new Date(k.expiresAt) > now).length;
-    const expired = userKeys.filter(k => k.expiresAt && new Date(k.expiresAt) < now).length;
-    const used = userKeys.filter(k => k.usedBy).length;
-    const unused = total - used;
-    
-    res.json({
-        success: true,
-        stats: { total, active, expired, used, unused }
-    });
 });
 
 // Add time to key
-app.post('/api/keys/addtime', (req, res) => {
+app.post('/api/keys/addtime', async (req, res) => {
     const { token, key, duration, amount } = req.body;
     
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
     
-    const db = readDB();
-    const user = db.users.find(u => u.token === token);
-    
-    if (!user) {
-        return res.json({ success: false, message: 'Invalid authentication' });
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        const keyEntry = db.keys.find(k => k.key === key && k.userId === user.id);
+        
+        if (!keyEntry) {
+            return res.json({ success: false, message: 'Key not found' });
+        }
+        
+        keyEntry.expiresAt = addTimeToKey(keyEntry.expiresAt, duration, parseInt(amount));
+        
+        if (mongoose.connection.readyState === 1) {
+            await Key.updateOne({ key: keyEntry.key }, { expiresAt: keyEntry.expiresAt });
+        } else {
+            await writeDB(db);
+        }
+        
+        res.json({ success: true, message: 'Time added', expiresAt: keyEntry.expiresAt });
+    } catch (error) {
+        console.error('Add time error:', error);
+        res.json({ success: false, message: 'Failed to add time. Please try again.' });
     }
-    
-    const keyEntry = db.keys.find(k => k.key === key && k.userId === user.id);
-    
-    if (!keyEntry) {
-        return res.json({ success: false, message: 'Key not found' });
-    }
-    
-    keyEntry.expiresAt = addTimeToKey(keyEntry.expiresAt, duration, parseInt(amount));
-    writeDB(db);
-    
-    res.json({ success: true, message: 'Time added', expiresAt: keyEntry.expiresAt });
 });
 
 // Reset HWID
-app.post('/api/keys/resethwid', (req, res) => {
+app.post('/api/keys/resethwid', async (req, res) => {
     const { token, key } = req.body;
     
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
     
-    const db = readDB();
-    const user = db.users.find(u => u.token === token);
-    
-    if (!user) {
-        return res.json({ success: false, message: 'Invalid authentication' });
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        const keyEntry = db.keys.find(k => k.key === key && k.userId === user.id);
+        
+        if (!keyEntry) {
+            return res.json({ success: false, message: 'Key not found' });
+        }
+        
+        keyEntry.hwid = null;
+        keyEntry.usedBy = null;
+        
+        if (mongoose.connection.readyState === 1) {
+            await Key.updateOne({ key: keyEntry.key }, { hwid: null, usedBy: null });
+        } else {
+            await writeDB(db);
+        }
+        
+        res.json({ success: true, message: 'HWID reset' });
+    } catch (error) {
+        console.error('Reset HWID error:', error);
+        res.json({ success: false, message: 'Failed to reset HWID. Please try again.' });
     }
-    
-    const keyEntry = db.keys.find(k => k.key === key && k.userId === user.id);
-    
-    if (!keyEntry) {
-        return res.json({ success: false, message: 'Key not found' });
-    }
-    
-    keyEntry.hwid = null;
-    keyEntry.usedBy = null;
-    writeDB(db);
-    
-    res.json({ success: true, message: 'HWID reset' });
 });
 
 // Delete key
-app.delete('/api/keys/:key', (req, res) => {
+app.delete('/api/keys/:key', async (req, res) => {
     const keyToDelete = req.params.key;
     const token = req.headers.authorization;
     
@@ -557,22 +701,31 @@ app.delete('/api/keys/:key', (req, res) => {
         return res.json({ success: false, message: 'Authentication required' });
     }
     
-    const db = readDB();
-    const user = db.users.find(u => u.token === token);
-    
-    if (!user) {
-        return res.json({ success: false, message: 'Invalid authentication' });
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        // Only delete if key belongs to user
+        if (mongoose.connection.readyState === 1) {
+            await Key.deleteOne({ key: keyToDelete, userId: user.id });
+        } else {
+            db.keys = db.keys.filter(k => !(k.key === keyToDelete && k.userId === user.id));
+            await writeDB(db);
+        }
+        
+        res.json({ success: true, message: 'Key deleted' });
+    } catch (error) {
+        console.error('Delete key error:', error);
+        res.json({ success: false, message: 'Failed to delete key. Please try again.' });
     }
-    
-    // Only delete if key belongs to user
-    db.keys = db.keys.filter(k => !(k.key === keyToDelete && k.userId === user.id));
-    writeDB(db);
-    
-    res.json({ success: true, message: 'Key deleted' });
 });
 
 // CLIENT VALIDATION (No auth required - used by C++ app)
-app.post('/api/validate', (req, res) => {
+app.post('/api/validate', async (req, res) => {
     const { key, hwid, ip, accountId, apiToken } = req.body;
     
     let clientIp = ip || 
@@ -593,8 +746,9 @@ app.post('/api/validate', (req, res) => {
         return res.json({ success: false, message: 'Key required' });
     }
     
-    const db = readDB();
-    const keyEntry = db.keys.find(k => k.key === key);
+    try {
+        const db = await readDB();
+        const keyEntry = db.keys.find(k => k.key === key);
     
     if (!keyEntry) {
         return res.json({ success: false, message: 'Invalid key' });
@@ -660,7 +814,11 @@ app.post('/api/validate', (req, res) => {
     keyEntry.lastCheck = now;
     if (!keyEntry.ip) keyEntry.ip = clientIp;
     
-    writeDB(db);
+    if (mongoose.connection.readyState === 1) {
+        await Key.updateOne({ key: keyEntry.key }, keyEntry);
+    } else {
+        await writeDB(db);
+    }
     
     // Calculate time remaining
     let timeRemaining = null;
