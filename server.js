@@ -482,12 +482,15 @@ app.post('/api/auth/login', async (req, res) => {
         // Successful login - clear attempts
         loginAttempts.delete(attemptKey);
         
-        // Generate new token
-        user.token = generateToken();
+        // Keep existing token - don't regenerate it (ensures C++ client credentials stay valid)
+        // Only generate token if user doesn't have one (shouldn't happen, but safety check)
+        if (!user.token) {
+            user.token = generateToken();
+        }
         user.lastLogin = new Date().toISOString();
         
         if (mongoose.connection.readyState === 1) {
-            await User.updateOne({ id: user.id }, { token: user.token, lastLogin: user.lastLogin });
+            await User.updateOne({ id: user.id }, { lastLogin: user.lastLogin });
         } else {
             await writeDB(db);
         }
