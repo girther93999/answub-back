@@ -1203,7 +1203,7 @@ const upload = multer({
 });
 
 app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
-    const { username, password } = req.body;
+    const { username, password, version } = req.body;
     
     // Verify admin
     if (!verifyAdmin(username, password)) {
@@ -1214,6 +1214,10 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
         return res.json({ success: false, message: 'No file uploaded' });
     }
     
+    if (!version || version.trim() === '') {
+        return res.json({ success: false, message: 'Version is required' });
+    }
+    
     // Rename file to a standard name
     const finalPath = path.join(UPDATES_DIR, 'latest.exe');
     if (fs.existsSync(finalPath)) {
@@ -1221,12 +1225,28 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
     }
     fs.renameSync(req.file.path, finalPath);
     
-    res.json({ 
-        success: true, 
-        message: 'File uploaded successfully',
+    // Save version info
+    const updateInfo = {
+        version: version.trim(),
         filename: 'latest.exe',
         size: req.file.size,
         uploadedAt: new Date().toISOString()
+    };
+    
+    try {
+        fs.writeFileSync(UPDATE_INFO_FILE, JSON.stringify(updateInfo, null, 2));
+        console.log('Saved update info:', updateInfo);
+    } catch (error) {
+        console.error('Error saving update info:', error);
+    }
+    
+    res.json({ 
+        success: true, 
+        message: 'File uploaded successfully',
+        version: updateInfo.version,
+        filename: updateInfo.filename,
+        size: updateInfo.size,
+        uploadedAt: updateInfo.uploadedAt
     });
 });
 
