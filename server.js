@@ -47,7 +47,11 @@ const userSchema = new mongoose.Schema({
 
 const inviteSchema = new mongoose.Schema({
     hash: { type: String, required: true, unique: true },
-    createdAt: { type: String, required: true }
+    codeEncrypted: { type: String, required: true }, // Encrypted plain code for display
+    createdAt: { type: String, required: true },
+    usedBy: String, // User ID who used it
+    usedAt: String, // When it was used
+    isUsed: { type: Boolean, default: false }
 });
 
 const Invite = mongoose.model('Invite', inviteSchema);
@@ -114,6 +118,34 @@ function hashInvite(code) {
     return crypto.createHash('sha256').update(code.toUpperCase().trim()).digest('hex');
 }
 
+// Encrypt invite code for storage (reversible with key)
+function encryptInviteCode(code) {
+    const algorithm = 'aes-256-cbc';
+    const key = crypto.createHash('sha256').update(ADMIN_PASSWORD + ADMIN_USERNAME).digest();
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv(algorithm, key, iv);
+    let encrypted = cipher.update(code, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    return iv.toString('hex') + ':' + encrypted;
+}
+
+// Decrypt invite code for display
+function decryptInviteCode(encryptedCode) {
+    try {
+        const algorithm = 'aes-256-cbc';
+        const key = crypto.createHash('sha256').update(ADMIN_PASSWORD + ADMIN_USERNAME).digest();
+        const parts = encryptedCode.split(':');
+        const iv = Buffer.from(parts[0], 'hex');
+        const encrypted = parts[1];
+        const decipher = crypto.createDecipheriv(algorithm, key, iv);
+        let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return decrypted;
+    } catch (error) {
+        return null;
+    }
+}
+
 // Initialize invites file
 async function initInvites() {
     // Hardcoded random invite codes (8 characters each) - these will be hashed
@@ -135,10 +167,12 @@ async function initInvites() {
         try {
             const existingCount = await Invite.countDocuments();
             if (existingCount === 0) {
-                // Initialize with hardcoded invites (hashed)
+                // Initialize with hardcoded invites (hashed + encrypted)
                 const invitesToAdd = hardcodedInvites.map(code => ({
                     hash: hashInvite(code),
-                    createdAt: new Date().toISOString()
+                    codeEncrypted: encryptInviteCode(code),
+                    createdAt: new Date().toISOString(),
+                    isUsed: false
                 }));
                 await Invite.insertMany(invitesToAdd);
                 console.log(`✅ Initialized ${hardcodedInvites.length} invite codes in MongoDB`);
@@ -176,13 +210,23 @@ async function initInvites() {
     }
 }
 
-// Read invites (returns hashed invites for display - we can't reverse them)
+// Read invites (returns all invites with decrypted codes and status)
 async function readInvites() {
     if (mongoose.connection.readyState === 1) {
         // Use MongoDB
         try {
-            const invites = await Invite.find({});
-            return { invites: invites.map(inv => inv.hash) };
+            const invites = await Invite.find({}).sort({ createdAt: -1 });
+            return { 
+                invites: invites.map(inv => ({
+                    hash: inv.hash,
+                    code: decryptInviteCode(inv.codeEncrypted) || '***',
+                    codeEncrypted: inv.codeEncrypted,
+                    createdAt: inv.createdAt,
+                    isUsed: inv.isUsed || false,
+                    usedBy: inv.usedBy || null,
+                    usedAt: inv.usedAt || null
+                }))
+            };
         } catch (error) {
             console.error('Error reading invites from MongoDB:', error);
             return { invites: [] };
@@ -191,32 +235,86 @@ async function readInvites() {
         // Use JSON file
         try {
             const data = fs.readFileSync(INVITES_FILE, 'utf8');
-            return JSON.parse(data);
+            const parsed = JSON.parse(data);
+            // Migrate old format if needed
+            if (parsed.invites && parsed.invites.length > 0 && typeof parsed.invites[0] === 'string') {
+                // Old format - convert to new format
+                parsed.invites = parsed.invites.map(hash => ({
+                    hash: hash,
+                    code: '***',
+                    codeEncrypted: '',
+                    createdAt: new Date().toISOString(),
+                    isUsed: false,
+                    usedBy: null,
+                    usedAt: null
+                }));
+                fs.writeFileSync(INVITES_FILE, JSON.stringify(parsed, null, 2));
+            }
+            // Decrypt codes for display
+            parsed.invites = parsed.invites.map(inv => ({
+                ...inv,
+                code: inv.codeEncrypted ? (decryptInviteCode(inv.codeEncrypted) || '***') : (inv.code || '***')
+            }));
+            return parsed;
         } catch (error) {
             return { invites: [] };
         }
     }
 }
 
-// Check if invite code is valid (case-insensitive, compares hashes)
+// Check if invite code is valid and return invite object (case-insensitive, compares hashes)
 async function isValidInvite(code) {
-    if (!code || typeof code !== 'string') return false;
+    if (!code || typeof code !== 'string') return null;
     const codeHash = hashInvite(code);
     
     if (mongoose.connection.readyState === 1) {
         // Use MongoDB
         try {
-            const invite = await Invite.findOne({ hash: codeHash });
-            return invite !== null;
+            const invite = await Invite.findOne({ hash: codeHash, isUsed: false });
+            return invite;
         } catch (error) {
             console.error('Error checking invite in MongoDB:', error);
-            return false;
+            return null;
         }
     } else {
         // Use JSON file
         const invitesData = await readInvites();
-        if (!invitesData.invites || !Array.isArray(invitesData.invites)) return false;
-        return invitesData.invites.includes(codeHash);
+        if (!invitesData.invites || !Array.isArray(invitesData.invites)) return null;
+        const inviteObj = invitesData.invites.find(inv => inv.hash === codeHash && !inv.isUsed);
+        return inviteObj || null;
+    }
+}
+
+// Mark invite as used
+async function markInviteAsUsed(invite, userId) {
+    if (mongoose.connection.readyState === 1) {
+        // Use MongoDB
+        try {
+            await Invite.updateOne(
+                { hash: invite.hash },
+                { 
+                    isUsed: true, 
+                    usedBy: userId, 
+                    usedAt: new Date().toISOString() 
+                }
+            );
+        } catch (error) {
+            console.error('Error marking invite as used in MongoDB:', error);
+        }
+    } else {
+        // Use JSON file
+        try {
+            const invitesData = await readInvites();
+            const inviteIndex = invitesData.invites.findIndex(inv => inv.hash === invite.hash);
+            if (inviteIndex !== -1) {
+                invitesData.invites[inviteIndex].isUsed = true;
+                invitesData.invites[inviteIndex].usedBy = userId;
+                invitesData.invites[inviteIndex].usedAt = new Date().toISOString();
+                fs.writeFileSync(INVITES_FILE, JSON.stringify(invitesData, null, 2));
+            }
+        } catch (error) {
+            console.error('Error marking invite as used in JSON:', error);
+        }
     }
 }
 
@@ -377,9 +475,9 @@ app.post('/api/auth/register', async (req, res) => {
     }
     
     // Validate invite code
-    const isValid = await isValidInvite(inviteCode);
-    if (!isValid) {
-        return res.json({ success: false, message: 'Invalid invite code. Registration is invite-only.' });
+    const invite = await isValidInvite(inviteCode);
+    if (!invite) {
+        return res.json({ success: false, message: 'Invalid or already used invite code. Registration is invite-only.' });
     }
     
     if (!validateInput(username, 30)) {
@@ -438,6 +536,9 @@ app.post('/api/auth/register', async (req, res) => {
             await writeDB(db);
             console.log(`✅ User saved to JSON: ${userData.username}`);
         }
+        
+        // Mark invite as used
+        await markInviteAsUsed(invite, userData.id);
         
         res.json({ 
             success: true, 
@@ -1631,16 +1732,13 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
     }
 });
 
-// Get all invites (admin only) - returns count only (can't show hashed codes)
+// Get all invites (admin only) - returns all invites with codes and status
 app.get('/api/admin/invites', requireAdmin, async (req, res) => {
     try {
         const invitesData = await readInvites();
-        const count = invitesData.invites ? invitesData.invites.length : 0;
-        // Return count and placeholder display (can't show actual codes since they're hashed)
         res.json({ 
             success: true, 
-            count: count,
-            invites: Array(count).fill('******') // Placeholder for display
+            invites: invitesData.invites || []
         });
     } catch (error) {
         console.error('Get invites error:', error);
@@ -1668,16 +1766,26 @@ app.post('/api/admin/invites', requireAdmin, async (req, res) => {
         
         if (mongoose.connection.readyState === 1) {
             // Save to MongoDB
-            const invitesToAdd = newHashes.map(hash => ({
-                hash: hash,
-                createdAt: new Date().toISOString()
+            const invitesToAdd = newInvites.map((code, index) => ({
+                hash: newHashes[index],
+                codeEncrypted: encryptInviteCode(code),
+                createdAt: new Date().toISOString(),
+                isUsed: false
             }));
             await Invite.insertMany(invitesToAdd);
         } else {
             // Save to JSON file
             const invitesData = await readInvites();
             const existingInvites = invitesData.invites || [];
-            invitesData.invites = [...existingInvites, ...newHashes];
+            const newInviteObjects = newInvites.map((code, index) => ({
+                hash: newHashes[index],
+                codeEncrypted: encryptInviteCode(code),
+                createdAt: new Date().toISOString(),
+                isUsed: false,
+                usedBy: null,
+                usedAt: null
+            }));
+            invitesData.invites = [...existingInvites, ...newInviteObjects];
             fs.writeFileSync(INVITES_FILE, JSON.stringify(invitesData, null, 2));
         }
         
@@ -1707,7 +1815,13 @@ app.delete('/api/admin/invites/:invite', requireAdmin, async (req, res) => {
             // Delete from JSON file
             const invitesData = await readInvites();
             const existingInvites = invitesData.invites || [];
-            const filteredInvites = existingInvites.filter(i => i !== inviteHash);
+            const filteredInvites = existingInvites.filter(i => {
+                // Support both old format (string hash) and new format (object)
+                if (typeof i === 'string') {
+                    return i !== inviteHash;
+                }
+                return i.hash !== inviteHash;
+            });
             
             if (filteredInvites.length === existingInvites.length) {
                 return res.json({ success: false, message: 'Invite code not found' });
