@@ -43,7 +43,10 @@ const userSchema = new mongoose.Schema({
     createdAt: { type: String, required: true },
     lastLogin: String,
     failedLogins: { type: Number, default: 0 },
-    lockedUntil: String
+    lockedUntil: String,
+    accountType: { type: String, default: 'user' }, // 'user', 'reseller', 'admin'
+    balance: { type: Number, default: 0 }, // For resellers, balance in dollars
+    allowedProducts: { type: [String], default: [] } // Products reseller can generate keys for
 });
 
 const inviteSchema = new mongoose.Schema({
@@ -71,7 +74,8 @@ const keySchema = new mongoose.Schema({
     hwid: String,
     ip: String,
     lastCheck: String,
-    hwidLocked: Boolean
+    hwidLocked: Boolean,
+    product: String // Product name (e.g., 'private', 'public')
 });
 
 const User = mongoose.model('User', userSchema);
@@ -557,6 +561,82 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
+// Reseller Registration (admin only - creates reseller account)
+app.post('/api/auth/register-reseller', requireAdmin, async (req, res) => {
+    const { username, email, password, initialBalance, allowedProducts } = req.body;
+    
+    if (!username || !email || !password) {
+        return res.json({ success: false, message: 'Username, email, and password required' });
+    }
+    
+    if (!validateInput(username, 30)) {
+        return res.json({ success: false, message: 'Invalid username' });
+    }
+    
+    if (!validateEmail(email)) {
+        return res.json({ success: false, message: 'Invalid email' });
+    }
+    
+    if (password.length < 6 || password.length > 100) {
+        return res.json({ success: false, message: 'Password must be 6-100 characters' });
+    }
+    
+    try {
+        const db = await readDB();
+        
+        // Check if username already exists
+        const existingUser = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
+        if (existingUser) {
+            return res.json({ success: false, message: 'Username already taken' });
+        }
+        
+        // Check if email already exists
+        const existingEmail = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+        if (existingEmail) {
+            return res.json({ success: false, message: 'Email already registered' });
+        }
+        
+        // Create reseller account
+        const userData = {
+            id: crypto.randomBytes(16).toString('hex'),
+            username: username,
+            email: email,
+            password: hashPassword(password),
+            createdAt: new Date().toISOString(),
+            token: generateToken(),
+            failedLogins: 0,
+            lockedUntil: null,
+            accountType: 'reseller',
+            balance: parseFloat(initialBalance) || 0,
+            allowedProducts: Array.isArray(allowedProducts) ? allowedProducts : (allowedProducts ? [allowedProducts] : ['private'])
+        };
+        
+        if (mongoose.connection.readyState === 1) {
+            const user = new User(userData);
+            await user.save();
+        } else {
+            db.users.push(userData);
+            await writeDB(db);
+        }
+        
+        res.json({ 
+            success: true, 
+            message: 'Reseller account created',
+            user: {
+                id: userData.id,
+                username: userData.username,
+                email: userData.email,
+                accountType: 'reseller',
+                balance: userData.balance,
+                allowedProducts: userData.allowedProducts
+            }
+        });
+    } catch (error) {
+        console.error('Reseller registration error:', error);
+        res.json({ success: false, message: 'Failed to create reseller account' });
+    }
+});
+
 // Login with rate limiting
 app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
@@ -663,8 +743,10 @@ app.post('/api/auth/login', async (req, res) => {
             user: {
                 id: user.id,
                 username: user.username,
-                email: user.email
-            }
+                email: user.email,
+                accountType: user.accountType || 'user'
+            },
+            accountType: user.accountType || 'user'
         });
     } catch (error) {
         console.error('Login error:', error);
@@ -713,8 +795,10 @@ app.post('/api/auth/verify', async (req, res) => {
             user: {
                 id: user.id,
                 username: user.username,
-                email: user.email
-            }
+                email: user.email,
+                accountType: user.accountType || 'user'
+            },
+            accountType: user.accountType || 'user'
         });
     } catch (error) {
         console.error('Verify error:', error);
@@ -953,6 +1037,146 @@ app.post('/api/keys/generate', async (req, res) => {
     } catch (error) {
         console.error('Generate key error:', error);
         res.json({ success: false, message: 'Failed to generate key. Please try again.' });
+    }
+});
+
+// Reseller key generation (with balance check and product selection)
+app.post('/api/reseller/keys/generate', async (req, res) => {
+    const { token, format, duration, amount, product } = req.body;
+    
+    if (!token) {
+        return res.json({ success: false, message: 'Authentication required' });
+    }
+    
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        if (user.accountType !== 'reseller') {
+            return res.json({ success: false, message: 'This endpoint is for resellers only' });
+        }
+        
+        if (!format || !format.includes('*')) {
+            return res.json({ success: false, message: 'Invalid format' });
+        }
+        
+        // Check product permission
+        const selectedProduct = product || 'private';
+        if (!user.allowedProducts || !user.allowedProducts.includes(selectedProduct)) {
+            return res.json({ success: false, message: `You don't have permission to generate keys for product: ${selectedProduct}` });
+        }
+        
+        // Check balance (each key costs $1)
+        const keyCost = 1.0;
+        if (!user.balance || user.balance < keyCost) {
+            return res.json({ success: false, message: `Insufficient balance. You need $${keyCost} to generate a key. Current balance: $${user.balance || 0}` });
+        }
+        
+        // Deduct balance
+        user.balance = (user.balance || 0) - keyCost;
+        
+        const key = generateKey(format);
+        const expiresAt = null;
+        
+        const keyEntry = {
+            key: key,
+            userId: user.id,
+            username: user.username,
+            format: format,
+            duration: duration,
+            amount: amount,
+            expiresAt: expiresAt,
+            createdAt: new Date().toISOString(),
+            usedBy: null,
+            usedAt: null,
+            hwid: null,
+            ip: null,
+            lastCheck: null,
+            product: selectedProduct
+        };
+        
+        if (mongoose.connection.readyState === 1) {
+            await User.updateOne({ id: user.id }, { balance: user.balance });
+            const keyDoc = new Key(keyEntry);
+            await keyDoc.save();
+        } else {
+            db.keys.push(keyEntry);
+            await writeDB(db);
+        }
+        
+        res.json({ 
+            success: true, 
+            key: key, 
+            data: keyEntry,
+            balance: user.balance
+        });
+    } catch (error) {
+        console.error('Reseller generate key error:', error);
+        res.json({ success: false, message: 'Failed to generate key' });
+    }
+});
+
+// Get reseller balance
+app.get('/api/reseller/balance', async (req, res) => {
+    const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
+    
+    if (!token) {
+        return res.json({ success: false, message: 'Authentication required' });
+    }
+    
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        if (user.accountType !== 'reseller') {
+            return res.json({ success: false, message: 'This endpoint is for resellers only' });
+        }
+        
+        res.json({ 
+            success: true, 
+            balance: user.balance || 0,
+            allowedProducts: user.allowedProducts || []
+        });
+    } catch (error) {
+        console.error('Get balance error:', error);
+        res.json({ success: false, message: 'Failed to get balance' });
+    }
+});
+
+// Get reseller's keys
+app.get('/api/reseller/keys', async (req, res) => {
+    const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
+    
+    if (!token) {
+        return res.json({ success: false, message: 'Authentication required' });
+    }
+    
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        if (user.accountType !== 'reseller') {
+            return res.json({ success: false, message: 'This endpoint is for resellers only' });
+        }
+        
+        const keys = db.keys.filter(k => k.userId === user.id);
+        
+        res.json({ success: true, keys: keys });
+    } catch (error) {
+        console.error('Get reseller keys error:', error);
+        res.json({ success: false, message: 'Failed to get keys' });
     }
 });
 
@@ -1673,6 +1897,9 @@ app.get('/api/admin/users/:userId', requireAdmin, async (req, res) => {
                 id: user.id,
                 username: user.username,
                 email: user.email,
+                accountType: user.accountType || 'user',
+                balance: user.balance,
+                allowedProducts: user.allowedProducts || [],
                 createdAt: user.createdAt,
                 lastLogin: user.lastLogin || 'Never'
             },
@@ -1777,6 +2004,160 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Create user error:', error);
         res.json({ success: false, message: 'Failed to create user' });
+    }
+});
+
+// Update reseller balance (admin only)
+app.post('/api/admin/resellers/:userId/balance', requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { balance } = req.body;
+        
+        if (balance === undefined || balance === null) {
+            return res.json({ success: false, message: 'Balance amount required' });
+        }
+        
+        const balanceAmount = parseFloat(balance);
+        if (isNaN(balanceAmount) || balanceAmount < 0) {
+            return res.json({ success: false, message: 'Invalid balance amount' });
+        }
+        
+        const db = await readDB();
+        const user = db.users.find(u => u.id === userId);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+        
+        if (user.accountType !== 'reseller') {
+            return res.json({ success: false, message: 'User is not a reseller' });
+        }
+        
+        user.balance = balanceAmount;
+        
+        if (mongoose.connection.readyState === 1) {
+            await User.updateOne({ id: userId }, { balance: user.balance });
+        } else {
+            await writeDB(db);
+        }
+        
+        res.json({ 
+            success: true, 
+            message: 'Balance updated successfully',
+            balance: user.balance
+        });
+    } catch (error) {
+        console.error('Update balance error:', error);
+        res.json({ success: false, message: 'Failed to update balance' });
+    }
+});
+
+// Add balance to reseller (admin only)
+app.post('/api/admin/resellers/:userId/add-balance', requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { amount } = req.body;
+        
+        if (amount === undefined || amount === null) {
+            return res.json({ success: false, message: 'Amount required' });
+        }
+        
+        const addAmount = parseFloat(amount);
+        if (isNaN(addAmount) || addAmount <= 0) {
+            return res.json({ success: false, message: 'Invalid amount' });
+        }
+        
+        const db = await readDB();
+        const user = db.users.find(u => u.id === userId);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+        
+        if (user.accountType !== 'reseller') {
+            return res.json({ success: false, message: 'User is not a reseller' });
+        }
+        
+        user.balance = (user.balance || 0) + addAmount;
+        
+        if (mongoose.connection.readyState === 1) {
+            await User.updateOne({ id: userId }, { balance: user.balance });
+        } else {
+            await writeDB(db);
+        }
+        
+        res.json({ 
+            success: true, 
+            message: `Added $${addAmount} to balance`,
+            balance: user.balance
+        });
+    } catch (error) {
+        console.error('Add balance error:', error);
+        res.json({ success: false, message: 'Failed to add balance' });
+    }
+});
+
+// Update reseller allowed products (admin only)
+app.post('/api/admin/resellers/:userId/products', requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { allowedProducts } = req.body;
+        
+        if (!Array.isArray(allowedProducts)) {
+            return res.json({ success: false, message: 'allowedProducts must be an array' });
+        }
+        
+        const db = await readDB();
+        const user = db.users.find(u => u.id === userId);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+        
+        if (user.accountType !== 'reseller') {
+            return res.json({ success: false, message: 'User is not a reseller' });
+        }
+        
+        user.allowedProducts = allowedProducts;
+        
+        if (mongoose.connection.readyState === 1) {
+            await User.updateOne({ id: userId }, { allowedProducts: user.allowedProducts });
+        } else {
+            await writeDB(db);
+        }
+        
+        res.json({ 
+            success: true, 
+            message: 'Allowed products updated successfully',
+            allowedProducts: user.allowedProducts
+        });
+    } catch (error) {
+        console.error('Update products error:', error);
+        res.json({ success: false, message: 'Failed to update allowed products' });
+    }
+});
+
+// Get all resellers (admin only)
+app.get('/api/admin/resellers', requireAdmin, async (req, res) => {
+    try {
+        const db = await readDB();
+        const resellers = db.users
+            .filter(u => u.accountType === 'reseller')
+            .map(u => ({
+                id: u.id,
+                username: u.username,
+                email: u.email,
+                balance: u.balance || 0,
+                allowedProducts: u.allowedProducts || [],
+                createdAt: u.createdAt,
+                lastLogin: u.lastLogin || 'Never',
+                keyCount: db.keys.filter(k => k.userId === u.id).length
+            }));
+        
+        res.json({ success: true, resellers });
+    } catch (error) {
+        console.error('Get resellers error:', error);
+        res.json({ success: false, message: 'Failed to fetch resellers' });
     }
 });
 
