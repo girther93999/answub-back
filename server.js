@@ -1939,7 +1939,8 @@ app.get('/api/admin/users/:userId', requireAdmin, async (req, res) => {
                 balance: user.balance,
                 allowedProducts: user.allowedProducts || [],
                 createdAt: user.createdAt,
-                lastLogin: user.lastLogin || 'Never'
+                lastLogin: user.lastLogin || 'Never',
+                token: user.token // Include token for admin to see credentials
             },
             keys: userKeys,
             totalKeys: userKeys.length
