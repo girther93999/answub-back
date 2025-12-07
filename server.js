@@ -21,6 +21,10 @@ const loginAttempts = new Map();
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_TIME = 15 * 60 * 1000; // 15 minutes
 
+// Admin token storage (in-memory, secure)
+const adminTokens = new Map(); // token -> { username, createdAt, lastAccess }
+const ADMIN_TOKEN_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
+
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10kb' })); // Limit payload size
@@ -418,10 +422,24 @@ app.post('/api/auth/login', async (req, res) => {
     }
     
     try {
-        // Check for hardcoded admin account first
-        if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-            // Admin login - return special admin token
-            const adminToken = generateToken();
+        // Check for hardcoded admin account first (encrypted check)
+        const adminUserEncrypted = Buffer.from(ADMIN_USERNAME).toString('base64');
+        const adminPassEncrypted = Buffer.from(ADMIN_PASSWORD).toString('base64');
+        const inputUserEncrypted = Buffer.from(username).toString('base64');
+        const inputPassEncrypted = Buffer.from(password).toString('base64');
+        
+        if (inputUserEncrypted === adminUserEncrypted && inputPassEncrypted === adminPassEncrypted) {
+            // Admin login - store token securely
+            const adminToken = generateToken() + '_admin_' + Date.now();
+            adminTokens.set(adminToken, {
+                username: ADMIN_USERNAME,
+                createdAt: Date.now(),
+                lastAccess: Date.now()
+            });
+            
+            // Cleanup old admin tokens
+            cleanupAdminTokens();
+            
             return res.json({
                 success: true,
                 token: adminToken,
@@ -496,6 +514,20 @@ app.post('/api/auth/verify', async (req, res) => {
     }
     
     try {
+        // Check if admin token first
+        if (isAdminToken(token)) {
+            return res.json({
+                success: true,
+                user: {
+                    id: 'admin',
+                    username: ADMIN_USERNAME,
+                    email: 'admin@astreon.local',
+                    isAdmin: true
+                },
+                isAdmin: true
+            });
+        }
+        
         const db = await readDB();
         
         // Check if database is empty
@@ -1109,24 +1141,55 @@ if (process.env.RENDER) {
 }
 
 // Admin verification helper
-async function isAdmin(token) {
-    // Check if token matches admin (simple check - in production use proper admin tokens)
-    // For now, we'll check if user is admin by checking if they logged in with admin credentials
-    // This is a simplified check - you should store admin tokens properly
-    try {
-        const db = await readDB();
-        // Admin tokens start with special prefix (we'll generate them specially)
-        // For security, we'll check if username is admin in a stored admin session
-        // For now, simple check: if token is very long and matches pattern
-        return token && token.length > 40; // Admin tokens are longer (this is a placeholder)
-    } catch (error) {
-        return false;
+function isAdminToken(token) {
+    if (!token) return false;
+    
+    // Check if token is in admin tokens map
+    if (adminTokens.has(token)) {
+        const tokenData = adminTokens.get(token);
+        
+        // Check if token expired
+        if (Date.now() - tokenData.createdAt > ADMIN_TOKEN_EXPIRY) {
+            adminTokens.delete(token);
+            return false;
+        }
+        
+        // Update last access
+        tokenData.lastAccess = Date.now();
+        return true;
+    }
+    
+    return false;
+}
+
+// Cleanup expired admin tokens
+function cleanupAdminTokens() {
+    const now = Date.now();
+    for (const [token, data] of adminTokens.entries()) {
+        if (now - data.createdAt > ADMIN_TOKEN_EXPIRY) {
+            adminTokens.delete(token);
+        }
     }
 }
 
-// Better admin check - verify admin credentials directly
+// Admin middleware
+function requireAdmin(req, res, next) {
+    const token = req.headers['authorization'] || req.body.token || req.query.token;
+    
+    if (!isAdminToken(token)) {
+        return res.json({ success: false, message: 'Unauthorized: Admin access required' });
+    }
+    
+    next();
+}
+
+// Better admin check - verify admin credentials directly (for file upload)
 function verifyAdmin(username, password) {
-    return username === ADMIN_USERNAME && password === ADMIN_PASSWORD;
+    const adminUserEncrypted = Buffer.from(ADMIN_USERNAME).toString('base64');
+    const adminPassEncrypted = Buffer.from(ADMIN_PASSWORD).toString('base64');
+    const inputUserEncrypted = Buffer.from(username).toString('base64');
+    const inputPassEncrypted = Buffer.from(password).toString('base64');
+    return inputUserEncrypted === adminUserEncrypted && inputPassEncrypted === adminPassEncrypted;
 }
 
 // FILE UPLOAD ENDPOINTS (Admin Only)
@@ -1188,6 +1251,220 @@ app.get('/api/updates/check', (req, res) => {
     }
 });
 
+// ADMIN ENDPOINTS
+
+// Get all users (admin only)
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+    try {
+        const db = await readDB();
+        const users = db.users.map(u => ({
+            id: u.id,
+            username: u.username,
+            email: u.email,
+            createdAt: u.createdAt,
+            lastLogin: u.lastLogin || 'Never',
+            keyCount: db.keys.filter(k => k.userId === u.id).length
+        }));
+        res.json({ success: true, users });
+    } catch (error) {
+        console.error('Get users error:', error);
+        res.json({ success: false, message: 'Failed to fetch users' });
+    }
+});
+
+// Get user details with all keys (admin only)
+app.get('/api/admin/users/:userId', requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const db = await readDB();
+        
+        const user = db.users.find(u => u.id === userId);
+        if (!user) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+        
+        const userKeys = db.keys.filter(k => k.userId === userId).map(k => ({
+            key: k.key,
+            format: k.format,
+            duration: k.duration,
+            amount: k.amount,
+            expiresAt: k.expiresAt,
+            createdAt: k.createdAt,
+            usedBy: k.usedBy,
+            usedAt: k.usedAt,
+            hwid: k.hwid,
+            ip: k.ip
+        }));
+        
+        res.json({
+            success: true,
+            user: {
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                createdAt: user.createdAt,
+                lastLogin: user.lastLogin || 'Never'
+            },
+            keys: userKeys,
+            totalKeys: userKeys.length
+        });
+    } catch (error) {
+        console.error('Get user details error:', error);
+        res.json({ success: false, message: 'Failed to fetch user details' });
+    }
+});
+
+// Delete user (admin only)
+app.delete('/api/admin/users/:userId', requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const db = await readDB();
+        
+        // Remove user
+        db.users = db.users.filter(u => u.id !== userId);
+        
+        // Remove all user's keys
+        db.keys = db.keys.filter(k => k.userId !== userId);
+        
+        if (mongoose.connection.readyState === 1) {
+            await User.deleteOne({ id: userId });
+            await Key.deleteMany({ userId: userId });
+        } else {
+            await writeDB(db);
+        }
+        
+        res.json({ success: true, message: 'User and all associated keys deleted' });
+    } catch (error) {
+        console.error('Delete user error:', error);
+        res.json({ success: false, message: 'Failed to delete user' });
+    }
+});
+
+// Create user (admin only)
+app.post('/api/admin/users', requireAdmin, async (req, res) => {
+    const { username, email, password } = req.body;
+    
+    if (!username || !email || !password) {
+        return res.json({ success: false, message: 'Username, email, and password required' });
+    }
+    
+    if (!validateInput(username, 30)) {
+        return res.json({ success: false, message: 'Invalid username' });
+    }
+    
+    if (!validateEmail(email)) {
+        return res.json({ success: false, message: 'Invalid email' });
+    }
+    
+    if (password.length < 6 || password.length > 100) {
+        return res.json({ success: false, message: 'Password must be 6-100 characters' });
+    }
+    
+    try {
+        const db = await readDB();
+        
+        // Check if username already exists
+        const existingUser = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
+        if (existingUser) {
+            return res.json({ success: false, message: 'Username already taken' });
+        }
+        
+        // Check if email already exists
+        const existingEmail = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+        if (existingEmail) {
+            return res.json({ success: false, message: 'Email already registered' });
+        }
+        
+        const userData = {
+            id: crypto.randomBytes(16).toString('hex'),
+            username: username,
+            email: email,
+            password: hashPassword(password),
+            createdAt: new Date().toISOString(),
+            token: generateToken(),
+            failedLogins: 0,
+            lockedUntil: null
+        };
+        
+        if (mongoose.connection.readyState === 1) {
+            const user = new User(userData);
+            await user.save();
+        } else {
+            db.users.push(userData);
+            await writeDB(db);
+        }
+        
+        res.json({
+            success: true,
+            message: 'User created successfully',
+            user: {
+                id: userData.id,
+                username: userData.username,
+                email: userData.email
+            }
+        });
+    } catch (error) {
+        console.error('Create user error:', error);
+        res.json({ success: false, message: 'Failed to create user' });
+    }
+});
+
+// Get all invites (admin only)
+app.get('/api/admin/invites', requireAdmin, async (req, res) => {
+    try {
+        const invitesData = JSON.parse(fs.readFileSync(INVITES_FILE, 'utf8'));
+        res.json({ success: true, invites: invitesData.invites || [] });
+    } catch (error) {
+        console.error('Get invites error:', error);
+        res.json({ success: false, message: 'Failed to fetch invites' });
+    }
+});
+
+// Add invite codes (admin only)
+app.post('/api/admin/invites', requireAdmin, async (req, res) => {
+    const { count = 10 } = req.body;
+    
+    try {
+        const invitesData = JSON.parse(fs.readFileSync(INVITES_FILE, 'utf8'));
+        const existingInvites = invitesData.invites || [];
+        
+        // Generate new invites
+        const newInvites = [];
+        for (let i = 0; i < count; i++) {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let invite = '';
+            for (let j = 0; j < 8; j++) {
+                invite += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            newInvites.push(invite);
+        }
+        
+        invitesData.invites = [...existingInvites, ...newInvites];
+        fs.writeFileSync(INVITES_FILE, JSON.stringify(invitesData, null, 2));
+        
+        res.json({ success: true, message: `${count} invite codes generated`, invites: newInvites });
+    } catch (error) {
+        console.error('Add invites error:', error);
+        res.json({ success: false, message: 'Failed to generate invites' });
+    }
+});
+
+// Delete invite code (admin only)
+app.delete('/api/admin/invites/:invite', requireAdmin, async (req, res) => {
+    const { invite } = req.params;
+    
+    try {
+        const invitesData = JSON.parse(fs.readFileSync(INVITES_FILE, 'utf8'));
+        invitesData.invites = (invitesData.invites || []).filter(i => i !== invite);
+        fs.writeFileSync(INVITES_FILE, JSON.stringify(invitesData, null, 2));
+        
+        res.json({ success: true, message: 'Invite code deleted' });
+    } catch (error) {
+        console.error('Delete invite error:', error);
+        res.json({ success: false, message: 'Failed to delete invite' });
+    }
+});
+
 // Download update file (public endpoint for C++ client)
 app.get('/api/updates/download', (req, res) => {
     const updateFile = path.join(UPDATES_DIR, 'latest.exe');
@@ -1204,7 +1481,7 @@ app.get('/api/updates/download', (req, res) => {
     });
 });
 
-// Cleanup old login attempts every hour
+// Cleanup old login attempts and admin tokens every hour
 setInterval(() => {
     const now = Date.now();
     for (const [key, value] of loginAttempts.entries()) {
@@ -1212,6 +1489,7 @@ setInterval(() => {
             loginAttempts.delete(key);
         }
     }
+    cleanupAdminTokens();
 }, 60 * 60 * 1000);
 
 // Start server
