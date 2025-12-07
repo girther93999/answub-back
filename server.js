@@ -1270,8 +1270,18 @@ app.get('/api/updates/check', (req, res) => {
             const stats = fs.statSync(updateFile);
             const serverVersion = updateInfo ? updateInfo.version : null;
             
+            // Normalize versions for comparison (remove leading zeros, handle different formats)
+            const normalizeVersion = (v) => {
+                if (!v) return '';
+                return v.trim().replace(/^0+/, '').replace(/\.0+$/, '') || '0';
+            };
+            
+            const normalizedClient = normalizeVersion(clientVersion);
+            const normalizedServer = normalizeVersion(serverVersion);
+            
             // If client provided version and it matches server version, no update needed
-            if (clientVersion && serverVersion && clientVersion.trim() === serverVersion.trim()) {
+            if (clientVersion && serverVersion && 
+                (clientVersion.trim() === serverVersion.trim() || normalizedClient === normalizedServer)) {
                 res.json({
                     success: true,
                     hasUpdate: false,
