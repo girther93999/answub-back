@@ -708,3 +708,26 @@ textarea:focus {
     outline: none;
     border-color: #667eea;
 }
+
+/* Settings */
+.settings-section {
+    margin-bottom: 1.5rem;
+}
+
+.settings-section h3 {
+    color: #e0e6ed;
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    font-weight: 600;
+}
+
+.btn-danger {
+    background: #ef4444;
+    color: white;
+    border: 1px solid #dc2626;
+}
+
+.btn-danger:hover {
+    background: #dc2626;
+    border-color: #b91c1c;
+}

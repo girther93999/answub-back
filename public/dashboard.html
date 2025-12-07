@@ -212,6 +212,77 @@ if (auth.validateKey(userKey)) {
                 </div>
             </div>
         </div>
+
+        <!-- Account Settings Card -->
+        <div class="card settings-card">
+            <div class="card-header">
+                <h2>⚙️ Account Settings</h2>
+            </div>
+            <div class="card-body">
+                <p class="credential-info">Manage your account information and security</p>
+                
+                <!-- Update Username -->
+                <div class="settings-section">
+                    <h3>Change Username</h3>
+                    <div class="form-row">
+                        <div class="input-group" style="flex: 1;">
+                            <label>New Username</label>
+                            <input type="text" id="new-username" placeholder="Enter new username">
+                        </div>
+                        <button class="btn btn-primary" onclick="updateUsername()" style="align-self: flex-end;">Update Username</button>
+                    </div>
+                </div>
+
+                <div style="height: 1px; background: #1a1f3a; margin: 1.5rem 0;"></div>
+
+                <!-- Update Email -->
+                <div class="settings-section">
+                    <h3>Change Email</h3>
+                    <div class="form-row">
+                        <div class="input-group" style="flex: 1;">
+                            <label>New Email</label>
+                            <input type="email" id="new-email" placeholder="Enter new email">
+                        </div>
+                        <button class="btn btn-primary" onclick="updateEmail()" style="align-self: flex-end;">Update Email</button>
+                    </div>
+                </div>
+
+                <div style="height: 1px; background: #1a1f3a; margin: 1.5rem 0;"></div>
+
+                <!-- Update Password -->
+                <div class="settings-section">
+                    <h3>Change Password</h3>
+                    <div class="form-row" style="flex-direction: column; gap: 1rem;">
+                        <div class="input-group">
+                            <label>Current Password</label>
+                            <input type="password" id="current-password" placeholder="Enter current password">
+                        </div>
+                        <div class="input-group">
+                            <label>New Password</label>
+                            <input type="password" id="new-password" placeholder="Enter new password (min 6 characters)">
+                        </div>
+                        <button class="btn btn-primary" onclick="updatePassword()">Update Password</button>
+                    </div>
+                </div>
+
+                <div style="height: 1px; background: #1a1f3a; margin: 1.5rem 0;"></div>
+
+                <!-- Delete Account -->
+                <div class="settings-section" style="border-left: 3px solid #ef4444; padding-left: 1rem;">
+                    <h3 style="color: #ef4444;">Delete Account</h3>
+                    <p style="color: #8b92a7; font-size: 0.875rem; margin-bottom: 1rem;">
+                        This will permanently delete your account and all your license keys. This action cannot be undone.
+                    </p>
+                    <div class="form-row">
+                        <div class="input-group" style="flex: 1;">
+                            <label>Confirm Password</label>
+                            <input type="password" id="delete-password" placeholder="Enter your password to confirm">
+                        </div>
+                        <button class="btn btn-danger" onclick="deleteAccount()" style="align-self: flex-end;">Delete Account</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Modal for Add Time -->

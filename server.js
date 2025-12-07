@@ -508,6 +508,183 @@ app.post('/api/auth/verify', async (req, res) => {
     }
 });
 
+// ACCOUNT SETTINGS ROUTES
+
+// Update password
+app.post('/api/account/update-password', async (req, res) => {
+    const { token, currentPassword, newPassword } = req.body;
+    
+    if (!token || !currentPassword || !newPassword) {
+        return res.json({ success: false, message: 'All fields required' });
+    }
+    
+    if (newPassword.length < 6 || newPassword.length > 100) {
+        return res.json({ success: false, message: 'Password must be 6-100 characters' });
+    }
+    
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        // Verify current password
+        if (user.password !== hashPassword(currentPassword)) {
+            return res.json({ success: false, message: 'Current password is incorrect' });
+        }
+        
+        // Update password
+        user.password = hashPassword(newPassword);
+        
+        if (mongoose.connection.readyState === 1) {
+            await User.updateOne({ id: user.id }, { password: user.password });
+        } else {
+            await writeDB(db);
+        }
+        
+        res.json({ success: true, message: 'Password updated successfully' });
+    } catch (error) {
+        console.error('Update password error:', error);
+        res.json({ success: false, message: 'Failed to update password. Please try again.' });
+    }
+});
+
+// Update email
+app.post('/api/account/update-email', async (req, res) => {
+    const { token, newEmail } = req.body;
+    
+    if (!token || !newEmail) {
+        return res.json({ success: false, message: 'Email required' });
+    }
+    
+    if (!validateEmail(newEmail)) {
+        return res.json({ success: false, message: 'Invalid email format' });
+    }
+    
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        // Check if email already exists
+        const existingUser = db.users.find(u => 
+            u.email.toLowerCase() === newEmail.toLowerCase() && u.id !== user.id
+        );
+        if (existingUser) {
+            return res.json({ success: false, message: 'Email already registered' });
+        }
+        
+        // Update email
+        user.email = newEmail;
+        
+        if (mongoose.connection.readyState === 1) {
+            await User.updateOne({ id: user.id }, { email: user.email });
+        } else {
+            await writeDB(db);
+        }
+        
+        res.json({ success: true, message: 'Email updated successfully', email: newEmail });
+    } catch (error) {
+        console.error('Update email error:', error);
+        res.json({ success: false, message: 'Failed to update email. Please try again.' });
+    }
+});
+
+// Update username
+app.post('/api/account/update-username', async (req, res) => {
+    const { token, newUsername } = req.body;
+    
+    if (!token || !newUsername) {
+        return res.json({ success: false, message: 'Username required' });
+    }
+    
+    if (!validateInput(newUsername, 30)) {
+        return res.json({ success: false, message: 'Invalid username' });
+    }
+    
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        // Check if username already exists
+        const existingUser = db.users.find(u => 
+            u.username.toLowerCase() === newUsername.toLowerCase() && u.id !== user.id
+        );
+        if (existingUser) {
+            return res.json({ success: false, message: 'Username already taken' });
+        }
+        
+        // Update username in user record
+        user.username = newUsername;
+        
+        // Update username in all keys belonging to this user
+        db.keys.forEach(key => {
+            if (key.userId === user.id) {
+                key.username = newUsername;
+            }
+        });
+        
+        if (mongoose.connection.readyState === 1) {
+            await User.updateOne({ id: user.id }, { username: user.username });
+            await Key.updateMany({ userId: user.id }, { username: user.username });
+        } else {
+            await writeDB(db);
+        }
+        
+        res.json({ success: true, message: 'Username updated successfully', username: newUsername });
+    } catch (error) {
+        console.error('Update username error:', error);
+        res.json({ success: false, message: 'Failed to update username. Please try again.' });
+    }
+});
+
+// Delete account
+app.post('/api/account/delete', async (req, res) => {
+    const { token, password } = req.body;
+    
+    if (!token || !password) {
+        return res.json({ success: false, message: 'Password required to delete account' });
+    }
+    
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        // Verify password
+        if (user.password !== hashPassword(password)) {
+            return res.json({ success: false, message: 'Incorrect password' });
+        }
+        
+        // Delete all keys belonging to this user
+        if (mongoose.connection.readyState === 1) {
+            await Key.deleteMany({ userId: user.id });
+            await User.deleteOne({ id: user.id });
+        } else {
+            db.keys = db.keys.filter(k => k.userId !== user.id);
+            db.users = db.users.filter(u => u.id !== user.id);
+            await writeDB(db);
+        }
+        
+        res.json({ success: true, message: 'Account deleted successfully' });
+    } catch (error) {
+        console.error('Delete account error:', error);
+        res.json({ success: false, message: 'Failed to delete account. Please try again.' });
+    }
+});
+
 // KEY MANAGEMENT ROUTES
 
 // Generate key

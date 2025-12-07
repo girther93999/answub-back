@@ -371,11 +371,170 @@ document.getElementById('addTimeModal')?.addEventListener('click', function(e) {
     }
 });
 
+// Update username
+async function updateUsername() {
+    const newUsername = document.getElementById('new-username').value.trim();
+    
+    if (!newUsername) {
+        alert('Please enter a new username');
+        return;
+    }
+    
+    if (newUsername.length < 3 || newUsername.length > 30) {
+        alert('Username must be 3-30 characters');
+        return;
+    }
+    
+    if (!confirm(`Change username to "${newUsername}"?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API}/account/update-username`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: currentToken, newUsername: newUsername })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Username updated successfully!');
+            document.getElementById('new-username').value = '';
+            document.getElementById('username-display').textContent = newUsername;
+            document.getElementById('account-username').textContent = newUsername;
+            currentUser.username = newUsername;
+            localStorage.setItem('astreon_user', JSON.stringify(currentUser));
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (error) {
+        alert('Connection error. Make sure server is running.');
+    }
+}
+
+// Update email
+async function updateEmail() {
+    const newEmail = document.getElementById('new-email').value.trim();
+    
+    if (!newEmail) {
+        alert('Please enter a new email');
+        return;
+    }
+    
+    if (!confirm(`Change email to "${newEmail}"?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API}/account/update-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: currentToken, newEmail: newEmail })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Email updated successfully!');
+            document.getElementById('new-email').value = '';
+            currentUser.email = newEmail;
+            localStorage.setItem('astreon_user', JSON.stringify(currentUser));
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (error) {
+        alert('Connection error. Make sure server is running.');
+    }
+}
+
+// Update password
+async function updatePassword() {
+    const currentPassword = document.getElementById('current-password').value;
+    const newPassword = document.getElementById('new-password').value;
+    
+    if (!currentPassword || !newPassword) {
+        alert('Please fill in all fields');
+        return;
+    }
+    
+    if (newPassword.length < 6) {
+        alert('New password must be at least 6 characters');
+        return;
+    }
+    
+    if (!confirm('Change your password?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API}/account/update-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                token: currentToken, 
+                currentPassword: currentPassword,
+                newPassword: newPassword 
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Password updated successfully!');
+            document.getElementById('current-password').value = '';
+            document.getElementById('new-password').value = '';
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (error) {
+        alert('Connection error. Make sure server is running.');
+    }
+}
+
+// Delete account
+async function deleteAccount() {
+    const password = document.getElementById('delete-password').value;
+    
+    if (!password) {
+        alert('Please enter your password to confirm');
+        return;
+    }
+    
+    if (!confirm('⚠️ WARNING: This will permanently delete your account and ALL your license keys!\n\nThis action CANNOT be undone!\n\nAre you absolutely sure?')) {
+        return;
+    }
+    
+    if (!confirm('Last chance! Are you 100% sure you want to delete your account?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API}/account/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: currentToken, password: password })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Account deleted successfully. You will be logged out.');
+            logout();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (error) {
+        alert('Connection error. Make sure server is running.');
+    }
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
     if (await checkAuth()) {
         loadKeys();
         loadStats();
+        loadMessages();
     }
 });
 
