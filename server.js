@@ -1245,35 +1245,35 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
     const changelogText = changelog && changelog.trim() ? changelog.trim() : 'No changes specified';
     
     const embed = {
-        title: '🚀 New Update Available',
-        description: `**Version ${updateInfo.version}** has been released!`,
-        color: 0x00ff00, // Green color
+        title: 'Fortnite Private - Update Available',
+        description: `Version ${updateInfo.version} is now available.`,
+        color: 0x5865F2, // Dark blue/purple
         fields: [
             {
-                name: '📝 What\'s Changed',
+                name: 'Changes',
                 value: changelogText,
                 inline: false
             },
             {
-                name: '💾 File Size',
+                name: 'File Size',
                 value: `${(updateInfo.size / 1024 / 1024).toFixed(2)} MB`,
                 inline: true
             },
             {
-                name: '📅 Released',
+                name: 'Released',
                 value: new Date(updateInfo.uploadedAt).toLocaleString(),
                 inline: true
             }
         ],
         footer: {
-            text: 'Astreon Auth System'
+            text: 'Astreon'
         },
         timestamp: updateInfo.uploadedAt
     };
     
     const webhookPayload = {
         embeds: [embed],
-        content: '**Please run your cheat again to update!**'
+        content: 'Run Fortnite Private loader again to update.'
     };
     
     // Send Discord webhook (non-blocking)
