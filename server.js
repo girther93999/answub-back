@@ -1257,7 +1257,8 @@ app.get('/api/updates/check', (req, res) => {
                     hasUpdate: false,
                     message: 'Already on latest version',
                     currentVersion: clientVersion,
-                    serverVersion: serverVersion
+                    serverVersion: serverVersion,
+                    version: serverVersion // Include version even when no update
                 });
             } else if (serverVersion) {
                 // Update available - return server version
@@ -1265,12 +1266,12 @@ app.get('/api/updates/check', (req, res) => {
                     success: true,
                     hasUpdate: true,
                     version: serverVersion,
+                    serverVersion: serverVersion, // Explicit server version
                     filename: 'latest.exe',
                     size: stats.size,
                     modifiedAt: stats.mtime.toISOString(),
                     downloadUrl: '/api/updates/download',
-                    currentVersion: clientVersion || 'unknown',
-                    serverVersion: serverVersion
+                    currentVersion: clientVersion || 'unknown'
                 });
             } else {
                 // Update file exists but no version info - still allow update
