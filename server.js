@@ -1016,7 +1016,7 @@ app.post('/api/keys/stats', async (req, res) => {
     }
 });
 
-// Add time to key
+// Add time to key (admin or owner)
 app.post('/api/keys/addtime', async (req, res) => {
     const { token, key, duration, amount } = req.body;
     
@@ -1024,18 +1024,27 @@ app.post('/api/keys/addtime', async (req, res) => {
         return res.json({ success: false, message: 'Authentication required' });
     }
     
+    const isAdmin = isAdminToken(token);
+    
     try {
         const db = await readDB();
-        const user = db.users.find(u => u.token === token);
         
-        if (!user) {
-            return res.json({ success: false, message: 'Invalid authentication' });
-        }
-        
-        const keyEntry = db.keys.find(k => k.key === key && k.userId === user.id);
+        // Find key
+        const keyEntry = db.keys.find(k => k.key === key);
         
         if (!keyEntry) {
             return res.json({ success: false, message: 'Key not found' });
+        }
+        
+        // If not admin, check if user owns the key
+        if (!isAdmin) {
+            const user = db.users.find(u => u.token === token);
+            if (!user) {
+                return res.json({ success: false, message: 'Invalid authentication' });
+            }
+            if (keyEntry.userId !== user.id) {
+                return res.json({ success: false, message: 'You do not have permission to modify this key' });
+            }
         }
         
         keyEntry.expiresAt = addTimeToKey(keyEntry.expiresAt, duration, parseInt(amount));
@@ -1053,7 +1062,7 @@ app.post('/api/keys/addtime', async (req, res) => {
     }
 });
 
-// Reset HWID
+// Reset HWID (admin or owner)
 app.post('/api/keys/resethwid', async (req, res) => {
     const { token, key } = req.body;
     
@@ -1061,18 +1070,27 @@ app.post('/api/keys/resethwid', async (req, res) => {
         return res.json({ success: false, message: 'Authentication required' });
     }
     
+    const isAdmin = isAdminToken(token);
+    
     try {
         const db = await readDB();
-        const user = db.users.find(u => u.token === token);
         
-        if (!user) {
-            return res.json({ success: false, message: 'Invalid authentication' });
-        }
-        
-        const keyEntry = db.keys.find(k => k.key === key && k.userId === user.id);
+        // Find key
+        const keyEntry = db.keys.find(k => k.key === key);
         
         if (!keyEntry) {
             return res.json({ success: false, message: 'Key not found' });
+        }
+        
+        // If not admin, check if user owns the key
+        if (!isAdmin) {
+            const user = db.users.find(u => u.token === token);
+            if (!user) {
+                return res.json({ success: false, message: 'Invalid authentication' });
+            }
+            if (keyEntry.userId !== user.id) {
+                return res.json({ success: false, message: 'You do not have permission to modify this key' });
+            }
         }
         
         keyEntry.hwid = null;
@@ -1091,7 +1109,7 @@ app.post('/api/keys/resethwid', async (req, res) => {
     }
 });
 
-// Delete key
+// Delete key (admin or owner)
 app.delete('/api/keys/:key', async (req, res) => {
     const keyToDelete = req.params.key;
     const token = req.headers.authorization;
@@ -1099,6 +1117,9 @@ app.delete('/api/keys/:key', async (req, res) => {
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
+    
+    // Check if admin token
+    const isAdmin = isAdminToken(token);
     
     try {
         const db = await readDB();
@@ -1849,6 +1870,70 @@ app.delete('/api/admin/invites/:invite', requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Delete invite error:', error);
         res.json({ success: false, message: 'Failed to delete invite' });
+    }
+});
+
+// Admin-only key generation (no user account required)
+app.post('/api/admin/keys/generate', requireAdmin, async (req, res) => {
+    const { format, duration, amount } = req.body;
+    
+    if (!format || !format.includes('*')) {
+        return res.json({ success: false, message: 'Invalid format. Must include * for random characters.' });
+    }
+    
+    if (!duration || !['days', 'weeks', 'months', 'years'].includes(duration)) {
+        return res.json({ success: false, message: 'Invalid duration. Must be: days, weeks, months, or years.' });
+    }
+    
+    if (!amount || amount < 1) {
+        return res.json({ success: false, message: 'Amount must be at least 1.' });
+    }
+    
+    try {
+        const key = generateKey(format);
+        const expiresAt = null; // Will be set on first use
+        
+        const keyEntry = {
+            key: key,
+            userId: 'admin', // Special admin user ID
+            username: 'Admin',
+            format: format,
+            duration: duration,
+            amount: amount,
+            expiresAt: expiresAt,
+            createdAt: new Date().toISOString(),
+            usedBy: null,
+            usedAt: null,
+            hwid: null,
+            ip: null,
+            lastCheck: null,
+            hwidLocked: false
+        };
+        
+        if (mongoose.connection.readyState === 1) {
+            const keyDoc = new Key(keyEntry);
+            await keyDoc.save();
+        } else {
+            const db = await readDB();
+            db.keys.push(keyEntry);
+            await writeDB(db);
+        }
+        
+        res.json({ success: true, key: key, data: keyEntry });
+    } catch (error) {
+        console.error('Admin generate key error:', error);
+        res.json({ success: false, message: 'Failed to generate key. Please try again.' });
+    }
+});
+
+// Admin-only key list (all keys)
+app.get('/api/admin/keys', requireAdmin, async (req, res) => {
+    try {
+        const db = await readDB();
+        res.json({ success: true, keys: db.keys });
+    } catch (error) {
+        console.error('Admin list keys error:', error);
+        res.json({ success: false, message: 'Failed to list keys.' });
     }
 });
 
