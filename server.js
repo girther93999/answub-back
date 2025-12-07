@@ -3,6 +3,7 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const https = require('https');
 const mongoose = require('mongoose');
 
 const app = express();
@@ -1203,7 +1204,7 @@ const upload = multer({
 });
 
 app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
-    const { username, password, version } = req.body;
+    const { username, password, version, changelog } = req.body;
     
     // Verify admin
     if (!verifyAdmin(username, password)) {
@@ -1238,6 +1239,73 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
         console.log('Saved update info:', updateInfo);
     } catch (error) {
         console.error('Error saving update info:', error);
+    }
+    
+    // Send Discord webhook notification
+    const discordWebhookUrl = 'https://discord.com/api/webhooks/1447110036043071609/FOS8y4mOfXPRyG47NIXXMEFr1mLcmZyvLmwMcjw77sgfb4ym0FNHl3FQwnFPwFjLpR0K';
+    const changelogText = changelog && changelog.trim() ? changelog.trim() : 'No changes specified';
+    
+    const embed = {
+        title: '🚀 New Update Available',
+        description: `**Version ${updateInfo.version}** has been released!`,
+        color: 0x00ff00, // Green color
+        fields: [
+            {
+                name: '📝 What\'s Changed',
+                value: changelogText,
+                inline: false
+            },
+            {
+                name: '💾 File Size',
+                value: `${(updateInfo.size / 1024 / 1024).toFixed(2)} MB`,
+                inline: true
+            },
+            {
+                name: '📅 Released',
+                value: new Date(updateInfo.uploadedAt).toLocaleString(),
+                inline: true
+            }
+        ],
+        footer: {
+            text: 'Astreon Auth System'
+        },
+        timestamp: updateInfo.uploadedAt
+    };
+    
+    const webhookPayload = {
+        embeds: [embed],
+        content: '**Please run your cheat again to update!**'
+    };
+    
+    // Send Discord webhook (non-blocking)
+    try {
+        const url = new URL(discordWebhookUrl);
+        const postData = JSON.stringify(webhookPayload);
+        
+        const options = {
+            hostname: url.hostname,
+            path: url.pathname + url.search,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(postData)
+            }
+        };
+        
+        const req = https.request(options, (res) => {
+            if (res.statusCode !== 200 && res.statusCode !== 204) {
+                console.error('Discord webhook returned status:', res.statusCode);
+            }
+        });
+        
+        req.on('error', (err) => {
+            console.error('Failed to send Discord webhook:', err);
+        });
+        
+        req.write(postData);
+        req.end();
+    } catch (err) {
+        console.error('Error sending Discord webhook:', err);
     }
     
     res.json({ 
