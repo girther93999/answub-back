@@ -387,10 +387,13 @@ function calculateExpiry(duration, amount) {
         return null;
     }
     
+    // Normalize duration (handle both singular and plural forms)
+    const dur = duration ? duration.toLowerCase().replace(/s$/, '') : 'day';
+    
     const now = new Date();
     const expiry = new Date(now);
     
-    switch (duration) {
+    switch (dur) {
         case 'second':
             expiry.setSeconds(now.getSeconds() + amount);
             break;
@@ -412,6 +415,10 @@ function calculateExpiry(duration, amount) {
         case 'year':
             expiry.setFullYear(now.getFullYear() + amount);
             break;
+        default:
+            // Default to days if unknown duration
+            expiry.setDate(now.getDate() + amount);
+            break;
     }
     
     return expiry.toISOString();
@@ -430,9 +437,12 @@ function addTimeToKey(expiresAt, duration, amount) {
         baseDate = new Date();
     }
     
+    // Normalize duration (handle both singular and plural forms)
+    const dur = duration ? duration.toLowerCase().replace(/s$/, '') : 'day';
+    
     const newExpiry = new Date(baseDate);
     
-    switch (duration) {
+    switch (dur) {
         case 'second':
             newExpiry.setSeconds(baseDate.getSeconds() + amount);
             break;
@@ -453,6 +463,10 @@ function addTimeToKey(expiresAt, duration, amount) {
             break;
         case 'year':
             newExpiry.setFullYear(baseDate.getFullYear() + amount);
+            break;
+        default:
+            // Default to days if unknown duration
+            newExpiry.setDate(baseDate.getDate() + amount);
             break;
     }
     
