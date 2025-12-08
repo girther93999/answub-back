@@ -403,8 +403,14 @@ function calculateExpiry(duration, amount) {
         case 'day':
             expiry.setDate(now.getDate() + amount);
             break;
+        case 'week':
+            expiry.setDate(now.getDate() + (amount * 7));
+            break;
         case 'month':
             expiry.setMonth(now.getMonth() + amount);
+            break;
+        case 'year':
+            expiry.setFullYear(now.getFullYear() + amount);
             break;
     }
     
@@ -439,8 +445,14 @@ function addTimeToKey(expiresAt, duration, amount) {
         case 'day':
             newExpiry.setDate(baseDate.getDate() + amount);
             break;
+        case 'week':
+            newExpiry.setDate(baseDate.getDate() + (amount * 7));
+            break;
         case 'month':
             newExpiry.setMonth(baseDate.getMonth() + amount);
+            break;
+        case 'year':
+            newExpiry.setFullYear(baseDate.getFullYear() + amount);
             break;
     }
     
@@ -1465,13 +1477,6 @@ app.post('/api/validate', async (req, res) => {
             }
         }
         
-        if (keyEntry.expiresAt) {
-            const expiry = new Date(keyEntry.expiresAt);
-            if (expiry < new Date()) {
-                return res.json({ success: false, message: 'Key expired' });
-            }
-        }
-        
         const now = new Date().toISOString();
         
         // FIRST USE: Start countdown timer when key is first used
@@ -1482,6 +1487,14 @@ app.post('/api/validate', async (req, res) => {
                 keyEntry.expiresAt = calculateExpiry(keyEntry.duration, parseInt(keyEntry.amount) || 1);
             }
             keyEntry.usedAt = now;
+        }
+        
+        // Check expiration AFTER setting it on first use (or if it was already set)
+        if (keyEntry.expiresAt) {
+            const expiry = new Date(keyEntry.expiresAt);
+            if (expiry < new Date()) {
+                return res.json({ success: false, message: 'Key expired' });
+            }
         }
         
         // HWID LOCK: Bind key to first HWID (CPU ProcessorId) that uses it
