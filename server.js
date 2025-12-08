@@ -383,12 +383,12 @@ function generateKey(format) {
 
 // Calculate expiry date
 function calculateExpiry(duration, amount) {
-    if (duration === 'lifetime') {
-        return null;
-    }
-    
     // Normalize duration (handle both singular and plural forms)
     const dur = duration ? duration.toLowerCase().replace(/s$/, '') : 'day';
+    
+    if (dur === 'lifetime') {
+        return null;
+    }
     
     const now = new Date();
     const expiry = new Date(now);
@@ -1497,7 +1497,8 @@ app.post('/api/validate', async (req, res) => {
         const isFirstUse = !keyEntry.usedAt;
         if (isFirstUse && hwid) {
             // First time use - start expiration countdown NOW
-            if (keyEntry.duration !== 'lifetime') {
+            const duration = keyEntry.duration ? keyEntry.duration.toLowerCase().replace(/s$/, '') : 'day';
+            if (duration !== 'lifetime') {
                 keyEntry.expiresAt = calculateExpiry(keyEntry.duration, parseInt(keyEntry.amount) || 1);
             }
             keyEntry.usedAt = now;
