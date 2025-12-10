@@ -1,4 +1,4 @@
-# Astreon Auth - Frontend
+# Artic Auth - Frontend
 
 ## Hosting Instructions
 

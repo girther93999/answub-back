@@ -18,13 +18,13 @@ STEP 2: DEPLOY TO RENDER.COM
 4. Click "Connect GitHub"
 5. Select repository: "answub-back"
 6. Settings:
-   - Name: astreon-auth (or whatever you want)
+   - Name: artic-auth (or whatever you want)
    - Build Command: npm install
    - Start Command: node server.js
 7. Click "Create Web Service"
 8. Wait 2-3 minutes for deployment
 9. Done! You'll get a URL like:
-   https://astreon-auth.onrender.com
+   https://artic-auth.onrender.com
 
 
 STEP 3: UPDATE C++ CODE
@@ -35,7 +35,7 @@ FROM:
     AuthClient auth("http://localhost:3000");
 
 TO:
-    AuthClient auth("https://astreon-auth.onrender.com");
+    AuthClient auth("https://artic-auth.onrender.com");
 
 (Replace with your actual Render URL)
 
@@ -48,7 +48,7 @@ Change:
     const API = 'http://localhost:3000/api';
 
 To:
-    const API = 'https://astreon-auth.onrender.com/api';
+    const API = 'https://artic-auth.onrender.com/api';
 
 
 ========================================

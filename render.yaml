@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: astreon-auth
+    name: artic-auth
     env: node
     buildCommand: npm install
     startCommand: node server.js

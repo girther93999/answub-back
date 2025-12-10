@@ -1,5 +1,5 @@
 {
-  "name": "astreon-auth",
+  "name": "artic-auth",
   "version": "1.0.0",
   "description": "Simple authentication system for C++",
   "main": "server.js",

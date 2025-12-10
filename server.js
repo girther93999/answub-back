@@ -734,7 +734,7 @@ app.post('/api/auth/login', async (req, res) => {
                 user: {
                     id: 'admin',
                     username: ADMIN_USERNAME,
-                    email: 'admin@astreon.local',
+                    email: 'admin@artic.local',
                     isAdmin: true
                 },
                 isAdmin: true
@@ -814,7 +814,7 @@ app.post('/api/auth/verify', async (req, res) => {
                 user: {
                     id: 'admin',
                     username: ADMIN_USERNAME,
-                    email: 'admin@astreon.local',
+                    email: 'admin@artic.local',
                     isAdmin: true
                 },
                 isAdmin: true
@@ -1806,7 +1806,7 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
             }
         ],
         footer: {
-            text: 'Astreon'
+            text: 'Artic'
         },
         timestamp: updateInfo.uploadedAt
     };
@@ -2539,7 +2539,7 @@ setInterval(() => {
 
 // Start server
 app.listen(PORT, () => {
-    console.log(`🚀 Astreon Auth Server running on port ${PORT}`);
+    console.log(`🚀 Artic Auth Server running on port ${PORT}`);
     console.log(`📁 Database: ${DB_FILE}`);
     console.log(`🔒 Security: Rate limiting enabled`);
     console.log(`🔒 Max login attempts: ${MAX_LOGIN_ATTEMPTS}`);

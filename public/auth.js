@@ -36,8 +36,8 @@ async function register() {
         const data = await response.json();
         
         if (data.success) {
-            localStorage.setItem('astreon_token', data.token);
-            localStorage.setItem('astreon_user', JSON.stringify(data.user));
+            localStorage.setItem('artic_token', data.token);
+            localStorage.setItem('artic_user', JSON.stringify(data.user));
             
             // Backup account data (encrypted/hidden) - only for recovery, not visible on web
             const backupData = {
@@ -46,7 +46,7 @@ async function register() {
                 timestamp: Date.now()
             };
             // Store as base64 encoded to hide from casual inspection
-            localStorage.setItem('_astreon_backup', btoa(JSON.stringify(backupData)));
+            localStorage.setItem('_artic_backup', btoa(JSON.stringify(backupData)));
             
             // Redirect based on account type
             if (data.accountType === 'reseller') {
@@ -81,8 +81,8 @@ async function login() {
         const data = await response.json();
         
         if (data.success) {
-            localStorage.setItem('astreon_token', data.token);
-            localStorage.setItem('astreon_user', JSON.stringify(data.user));
+            localStorage.setItem('artic_token', data.token);
+            localStorage.setItem('artic_user', JSON.stringify(data.user));
             
             // Backup account data (encrypted/hidden) - only for recovery, not visible on web
             const backupData = {
@@ -91,7 +91,7 @@ async function login() {
                 timestamp: Date.now()
             };
             // Store as base64 encoded to hide from casual inspection
-            localStorage.setItem('_astreon_backup', btoa(JSON.stringify(backupData)));
+            localStorage.setItem('_artic_backup', btoa(JSON.stringify(backupData)));
             
             // Redirect based on account type
             if (data.accountType === 'reseller') {
@@ -114,7 +114,7 @@ function clearLocalKeys() {
     const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.includes('key') && key !== 'astreon_token' && key !== 'astreon_user') {
+        if (key && key.includes('key') && key !== 'artic_token' && key !== 'artic_user') {
             keysToRemove.push(key);
         }
     }
@@ -127,7 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
     clearLocalKeys();
     
     // Check if already logged in
-    const token = localStorage.getItem('astreon_token');
+    const token = localStorage.getItem('artic_token');
     if (token) {
         // Verify token is still valid before redirecting
         fetch(`${API}/auth/verify`, {
@@ -146,8 +146,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } else {
                 // Invalid token, clear it
-                localStorage.removeItem('astreon_token');
-                localStorage.removeItem('astreon_user');
+                localStorage.removeItem('artic_token');
+                localStorage.removeItem('artic_user');
                 // Don't show error - just stay on login page
             }
         })

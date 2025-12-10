@@ -9,7 +9,7 @@ function clearLocalKeys() {
     const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.includes('key') && key !== 'astreon_token' && key !== 'astreon_user') {
+        if (key && key.includes('key') && key !== 'artic_token' && key !== 'artic_user') {
             keysToRemove.push(key);
         }
     }
@@ -21,8 +21,8 @@ async function checkAuth() {
     // Clear any local keys on page load (security)
     clearLocalKeys();
     
-    currentToken = localStorage.getItem('astreon_token');
-    const userStr = localStorage.getItem('astreon_user');
+    currentToken = localStorage.getItem('artic_token');
+    const userStr = localStorage.getItem('artic_user');
     
     if (!currentToken || !userStr) {
         // No auth, redirect to login
@@ -34,8 +34,8 @@ async function checkAuth() {
         currentUser = JSON.parse(userStr);
     } catch (e) {
         // Invalid user data
-        localStorage.removeItem('astreon_token');
-        localStorage.removeItem('astreon_user');
+        localStorage.removeItem('artic_token');
+        localStorage.removeItem('artic_user');
         window.location.href = 'index.html';
         return false;
     }
@@ -61,7 +61,7 @@ async function checkAuth() {
             if (data.message) {
                 if (data.message.includes('Database reset') || data.message.includes('Session expired')) {
                     // Check if we have backup data - try to restore session
-                    const backupStr = localStorage.getItem('_astreon_backup');
+                    const backupStr = localStorage.getItem('_artic_backup');
                     if (backupStr) {
                         try {
                             const backupData = JSON.parse(atob(backupStr));
@@ -77,8 +77,8 @@ async function checkAuth() {
                                 .then(verifyData => {
                                     if (verifyData.success) {
                                         // Backup token still valid - restore session
-                                        localStorage.setItem('astreon_token', backupData.token);
-                                        localStorage.setItem('astreon_user', JSON.stringify(verifyData.user));
+                                        localStorage.setItem('artic_token', backupData.token);
+                                        localStorage.setItem('artic_user', JSON.stringify(verifyData.user));
                                         window.location.reload();
                                     } else {
                                         alert(`Your session expired. Your account "${backupData.username}" may still exist. Please try logging in again.`);
@@ -133,11 +133,11 @@ async function checkAuth() {
 function logout() {
     // Clear all auth data and any cached keys
     // Keep backup data for recovery (hidden, not visible on web)
-    const backupData = localStorage.getItem('_astreon_backup');
+    const backupData = localStorage.getItem('_artic_backup');
     localStorage.clear();
     sessionStorage.clear();
     if (backupData) {
-        localStorage.setItem('_astreon_backup', backupData);
+        localStorage.setItem('_artic_backup', backupData);
     }
     window.location.href = 'index.html';
 }
@@ -176,9 +176,9 @@ async function loadStats() {
 
 // Load saved key generation preferences
 function loadKeyPreferences() {
-    const savedFormat = localStorage.getItem('astreon_key_format');
-    const savedDuration = localStorage.getItem('astreon_key_duration');
-    const savedAmount = localStorage.getItem('astreon_key_amount');
+    const savedFormat = localStorage.getItem('artic_key_format');
+    const savedDuration = localStorage.getItem('artic_key_duration');
+    const savedAmount = localStorage.getItem('artic_key_amount');
     
     if (savedFormat) {
         document.getElementById('format').value = savedFormat;
@@ -193,9 +193,9 @@ function loadKeyPreferences() {
 
 // Save key generation preferences
 function saveKeyPreferences(format, duration, amount) {
-    localStorage.setItem('astreon_key_format', format);
-    localStorage.setItem('astreon_key_duration', duration);
-    localStorage.setItem('astreon_key_amount', amount);
+    localStorage.setItem('artic_key_format', format);
+    localStorage.setItem('artic_key_duration', duration);
+    localStorage.setItem('artic_key_amount', amount);
 }
 
 // Generate key
@@ -637,7 +637,7 @@ async function showFile(filename) {
             if (e.target === modal) modal.remove();
         });
     } catch (error) {
-        alert(`To view ${filename}:\n\n1. Go to your local project folder\n2. Open ${filename} in your editor\n\nThese files are in the root of your Astreon auth folder.`);
+        alert(`To view ${filename}:\n\n1. Go to your local project folder\n2. Open ${filename} in your editor\n\nThese files are in the root of your Artic auth folder.`);
     }
 }
 
@@ -716,7 +716,7 @@ async function updateUsername() {
             document.getElementById('username-display').textContent = newUsername;
             document.getElementById('account-username').textContent = newUsername;
             currentUser.username = newUsername;
-            localStorage.setItem('astreon_user', JSON.stringify(currentUser));
+            localStorage.setItem('artic_user', JSON.stringify(currentUser));
         } else {
             alert('Error: ' + data.message);
         }
@@ -751,7 +751,7 @@ async function updateEmail() {
             alert('Email updated successfully!');
             document.getElementById('new-email').value = '';
             currentUser.email = newEmail;
-            localStorage.setItem('astreon_user', JSON.stringify(currentUser));
+            localStorage.setItem('artic_user', JSON.stringify(currentUser));
         } else {
             alert('Error: ' + data.message);
         }

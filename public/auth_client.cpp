@@ -48,7 +48,7 @@ std::string AuthClient::getLocalIP() {
     std::string publicIP = "Unknown";
     
     try {
-        hSession = WinHttpOpen(L"Astreon/1.0",
+        hSession = WinHttpOpen(L"Artic/1.0",
             WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
             WINHTTP_NO_PROXY_NAME,
             WINHTTP_NO_PROXY_BYPASS, 0);

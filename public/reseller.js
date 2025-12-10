@@ -8,8 +8,8 @@ let allowedProducts = [];
 
 // Check authentication
 async function checkAuth() {
-    currentToken = localStorage.getItem('astreon_token');
-    const userStr = localStorage.getItem('astreon_user');
+    currentToken = localStorage.getItem('artic_token');
+    const userStr = localStorage.getItem('artic_user');
     
     if (!currentToken || !userStr) {
         window.location.href = 'index.html';
@@ -26,8 +26,8 @@ async function checkAuth() {
             return false;
         }
     } catch (e) {
-        localStorage.removeItem('astreon_token');
-        localStorage.removeItem('astreon_user');
+        localStorage.removeItem('artic_token');
+        localStorage.removeItem('artic_user');
         window.location.href = 'index.html';
         return false;
     }
@@ -374,8 +374,8 @@ document.addEventListener('click', (e) => {
 
 // Logout
 function logout() {
-    localStorage.removeItem('astreon_token');
-    localStorage.removeItem('astreon_user');
+    localStorage.removeItem('artic_token');
+    localStorage.removeItem('artic_user');
     window.location.href = 'index.html';
 }
 
