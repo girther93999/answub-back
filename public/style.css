@@ -55,11 +55,19 @@ body {
     gap: 0.5em;
     border-radius: 10px;
     padding: 0.6em;
-    border: none;
-    outline: none;
+    border: none !important;
+    outline: none !important;
     color: white;
     background-color: #171717;
     box-shadow: inset 2px 5px 10px rgb(5, 5, 5);
+}
+
+.field:focus,
+.field:focus-within,
+.field:active {
+    outline: none !important;
+    border: none !important;
+    box-shadow: inset 2px 5px 10px rgb(5, 5, 5) !important;
 }
 
 .input-icon {
@@ -78,11 +86,17 @@ body {
     font-size: 0.875rem;
 }
 
+.input-field:focus {
+    outline: none !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
 .input-field::placeholder {
     color: #888888;
 }
 
-/* Fix autofill white background */
+/* Fix autofill white background and remove all outlines */
 .input-field:-webkit-autofill,
 .input-field:-webkit-autofill:hover,
 .input-field:-webkit-autofill:focus,
@@ -92,6 +106,15 @@ body {
     background: transparent !important;
     background-color: transparent !important;
     color: #d3d3d3 !important;
+    outline: none !important;
+    border: none !important;
+    box-shadow: inset 2px 5px 10px rgb(5, 5, 5) !important;
+}
+
+.field:focus-within {
+    outline: none !important;
+    border: none !important;
+    box-shadow: inset 2px 5px 10px rgb(5, 5, 5) !important;
 }
 
 .form .btn {
