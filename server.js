@@ -390,6 +390,15 @@ function calculateExpiry(duration, amount) {
         return null;
     }
     
+    // Ensure amount is a valid number
+    const amt = parseInt(String(amount || 1), 10);
+    if (isNaN(amt) || amt <= 0) {
+        console.error(`Invalid amount in calculateExpiry: ${amount}, defaulting to 1`);
+        amount = 1;
+    } else {
+        amount = amt;
+    }
+    
     const now = new Date();
     const expiry = new Date(now);
     
@@ -439,6 +448,15 @@ function addTimeToKey(expiresAt, duration, amount) {
     
     // Normalize duration (handle both singular and plural forms)
     const dur = duration ? duration.toLowerCase().replace(/s$/, '') : 'day';
+    
+    // Ensure amount is a valid number
+    const amt = parseInt(String(amount || 1), 10);
+    if (isNaN(amt) || amt <= 0) {
+        console.error(`Invalid amount in addTimeToKey: ${amount}, defaulting to 1`);
+        amount = 1;
+    } else {
+        amount = amt;
+    }
     
     const newExpiry = new Date(baseDate);
     
@@ -1499,7 +1517,15 @@ app.post('/api/validate', async (req, res) => {
             // First time use - start expiration countdown NOW
             const duration = keyEntry.duration ? keyEntry.duration.toLowerCase().replace(/s$/, '') : 'day';
             if (duration !== 'lifetime') {
-                keyEntry.expiresAt = calculateExpiry(keyEntry.duration, parseInt(keyEntry.amount) || 1);
+                // Ensure amount is properly parsed as integer
+                const amount = parseInt(String(keyEntry.amount || 1), 10);
+                if (isNaN(amount) || amount <= 0) {
+                    return res.json({ success: false, message: 'Invalid key amount. Please contact support.' });
+                }
+                keyEntry.expiresAt = calculateExpiry(keyEntry.duration, amount);
+            } else {
+                // Lifetime key - ensure expiresAt stays null
+                keyEntry.expiresAt = null;
             }
             keyEntry.usedAt = now;
         }
@@ -1547,7 +1573,14 @@ app.post('/api/validate', async (req, res) => {
         // Calculate time remaining
         let timeRemaining = null;
         let timeRemainingSeconds = null;
-        if (keyEntry.expiresAt) {
+        
+        // Check if it's a lifetime key
+        const isLifetime = keyEntry.duration && keyEntry.duration.toLowerCase().replace(/s$/, '') === 'lifetime';
+        
+        if (isLifetime) {
+            timeRemaining = "Lifetime";
+            timeRemainingSeconds = null; // Lifetime keys don't have a time limit
+        } else if (keyEntry.expiresAt) {
             const expiry = new Date(keyEntry.expiresAt);
             const nowDate = new Date();
             timeRemainingSeconds = Math.max(0, Math.floor((expiry - nowDate) / 1000));
@@ -1570,6 +1603,11 @@ app.post('/api/validate', async (req, res) => {
             } else {
                 timeRemaining = "Expired";
             }
+        } else if (!keyEntry.usedAt) {
+            // Key hasn't been used yet - show duration instead
+            const duration = keyEntry.duration || 'days';
+            const amount = keyEntry.amount || 1;
+            timeRemaining = `Not used (${amount} ${duration})`;
         }
         
         res.json({ 
