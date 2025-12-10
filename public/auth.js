@@ -1,13 +1,13 @@
 const API = 'https://answub-back.onrender.com/api';
 
 function showRegister() {
-    document.getElementById('login-form').style.display = 'none';
-    document.getElementById('register-form').style.display = 'block';
+    document.getElementById('login-form').classList.remove('active');
+    document.getElementById('register-form').classList.add('active');
 }
 
 function showLogin() {
-    document.getElementById('register-form').style.display = 'none';
-    document.getElementById('login-form').style.display = 'block';
+    document.getElementById('register-form').classList.remove('active');
+    document.getElementById('login-form').classList.add('active');
 }
 
 async function register() {
