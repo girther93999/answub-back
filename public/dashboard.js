@@ -3,9 +3,6 @@ const API = 'https://answub-back.onrender.com/api';
 let currentModalKey = '';
 let currentToken = '';
 let currentUser = null;
-let userPrograms = ['cheat', 'spoofer']; // Default programs, will be loaded from server
-let subAccounts = []; // User's sub-accounts
-let currentSubAccount = null; // Currently selected sub-account
 
 // Security: Clear any keys from localStorage
 function clearLocalKeys() {
@@ -126,9 +123,6 @@ async function checkAuth() {
         if (codeAccountId) codeAccountId.textContent = currentUser.id;
         if (codeApiToken) codeApiToken.textContent = currentToken;
         
-        // Load user's programs
-        await loadUserPrograms();
-        
         return true;
     } catch (error) {
         console.error('Auth check failed:', error);
@@ -204,426 +198,14 @@ function saveKeyPreferences(format, duration, amount) {
     localStorage.setItem('artic_key_amount', amount);
 }
 
-// Load user's programs from server
-async function loadUserPrograms() {
-    try {
-        const response = await fetch(`${API}/account/programs`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: currentToken })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success && data.programs) {
-            userPrograms = data.programs;
-            updateProgramSelector();
-            updateProgramsDisplay();
-        }
-    } catch (error) {
-        console.error('Failed to load programs:', error);
-    }
-}
-
-// Update program selector dropdown
-function updateProgramSelector() {
-    const programSelect = document.getElementById('program');
-    if (!programSelect) return;
-    
-    // Clear existing options
-    programSelect.innerHTML = '';
-    
-    // Add options for each program
-    userPrograms.forEach(program => {
-        const option = document.createElement('option');
-        option.value = program;
-        option.textContent = program.charAt(0).toUpperCase() + program.slice(1); // Capitalize first letter
-        programSelect.appendChild(option);
-    });
-    
-    // Set first program as default
-    if (userPrograms.length > 0) {
-        programSelect.value = userPrograms[0];
-    }
-}
-
-// Update programs display in settings
-function updateProgramsDisplay() {
-    const programsList = document.getElementById('programs-list');
-    if (!programsList) return;
-    
-    programsList.innerHTML = '';
-    
-    userPrograms.forEach((program, index) => {
-        const programItem = document.createElement('div');
-        programItem.className = 'program-item';
-        programItem.innerHTML = `
-            <div class="program-name">${program.charAt(0).toUpperCase() + program.slice(1)}</div>
-            <button class="btn-icon btn-danger" onclick="removeProgram(${index})" title="Remove">
-                <i class="fas fa-times"></i>
-            </button>
-        `;
-        programsList.appendChild(programItem);
-    });
-}
-
-// Add new program
-async function addProgram() {
-    const programInput = document.getElementById('new-program');
-    if (!programInput) return;
-    
-    const newProgram = programInput.value.trim().toLowerCase();
-    
-    if (!newProgram) {
-        alert('Please enter a program name');
-        return;
-    }
-    
-    // Validate program name (alphanumeric and underscores only)
-    if (!/^[a-z0-9_]+$/.test(newProgram)) {
-        alert('Program name can only contain lowercase letters, numbers, and underscores');
-        return;
-    }
-    
-    if (userPrograms.includes(newProgram)) {
-        alert('This program already exists');
-        return;
-    }
-    
-    // Add to local array
-    userPrograms.push(newProgram);
-    
-    // Save to server
-    try {
-        const response = await fetch(`${API}/account/update-programs`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: currentToken, programs: userPrograms })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            programInput.value = '';
-            updateProgramSelector();
-            updateProgramsDisplay();
-            alert('Program added successfully!');
-        } else {
-            // Revert on error
-            userPrograms.pop();
-            alert('Error: ' + data.message);
-        }
-    } catch (error) {
-        // Revert on error
-        userPrograms.pop();
-        alert('Failed to add program. Please try again.');
-    }
-}
-
-// Remove program
-async function removeProgram(index) {
-    if (userPrograms.length <= 1) {
-        alert('You must have at least one program');
-        return;
-    }
-    
-    const programToRemove = userPrograms[index];
-    
-    if (!confirm(`Are you sure you want to remove "${programToRemove}"?`)) {
-        return;
-    }
-    
-    // Remove from local array
-    userPrograms.splice(index, 1);
-    
-    // Save to server
-    try {
-        const response = await fetch(`${API}/account/update-programs`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: currentToken, programs: userPrograms })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            updateProgramSelector();
-            updateProgramsDisplay();
-            alert('Program removed successfully!');
-        } else {
-            // Revert on error
-            userPrograms.splice(index, 0, programToRemove);
-            alert('Error: ' + data.message);
-        }
-    } catch (error) {
-        // Revert on error
-        userPrograms.splice(index, 0, programToRemove);
-        alert('Failed to remove program. Please try again.');
-    }
-}
-
-// Load sub-accounts
-async function loadSubAccounts() {
-    try {
-        const response = await fetch(`${API}/subaccounts/list`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: currentToken })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success && data.subAccounts) {
-            subAccounts = data.subAccounts;
-            updateSubAccountSelectors();
-            updateSubAccountsList();
-            
-            // Auto-select first sub-account if none selected
-            if (!currentSubAccount && subAccounts.length > 0) {
-                switchSubAccountById(subAccounts[0].id);
-            }
-        }
-    } catch (error) {
-        console.error('Failed to load sub-accounts:', error);
-    }
-}
-
-// Update sub-account selectors
-function updateSubAccountSelectors() {
-    const selector = document.getElementById('subaccount-selector');
-    const keyGenSelector = document.getElementById('subaccount-key-gen');
-    
-    [selector, keyGenSelector].forEach(select => {
-        if (!select) return;
-        
-        select.innerHTML = '';
-        
-        if (subAccounts.length === 0) {
-            select.innerHTML = '<option value="">No sub-accounts. Create one first.</option>';
-            return;
-        }
-        
-        subAccounts.forEach(subAccount => {
-            const option = document.createElement('option');
-            option.value = subAccount.id;
-            option.textContent = subAccount.name;
-            if (currentSubAccount && currentSubAccount.id === subAccount.id) {
-                option.selected = true;
-            }
-            select.appendChild(option);
-        });
-    });
-}
-
-// Update sub-accounts list display
-function updateSubAccountsList() {
-    const list = document.getElementById('subaccounts-list');
-    if (!list) return;
-    
-    if (subAccounts.length === 0) {
-        list.innerHTML = '<p style="text-align: center; color: #888888; padding: 2rem;">No sub-accounts yet. Create one to get started!</p>';
-        return;
-    }
-    
-    list.innerHTML = '';
-    subAccounts.forEach(subAccount => {
-        const item = document.createElement('div');
-        item.className = 'subaccount-item';
-        item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: #1a1a1a; border: 1px solid #30363d; border-radius: 8px; margin-bottom: 0.5rem;';
-        item.innerHTML = `
-            <div>
-                <div style="font-weight: 600; color: #ffffff; margin-bottom: 0.25rem;">${escapeHtml(subAccount.name)}</div>
-                <div style="font-size: 0.875rem; color: #888888;">Created: ${new Date(subAccount.createdAt).toLocaleString()}</div>
-            </div>
-            <div style="display: flex; gap: 0.5rem;">
-                <button class="btn btn-secondary btn-small" onclick="editSubAccount('${subAccount.id}')" title="Edit">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-danger btn-small" onclick="deleteSubAccount('${subAccount.id}')" title="Delete">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </div>
-        `;
-        list.appendChild(item);
-    });
-}
-
-// Switch sub-account
-function switchSubAccount() {
-    const selector = document.getElementById('subaccount-selector');
-    if (!selector) return;
-    
-    const subAccountId = selector.value;
-    if (!subAccountId) {
-        currentSubAccount = null;
-        updateCredentialsDisplay();
-        return;
-    }
-    
-    switchSubAccountById(subAccountId);
-}
-
-// Switch sub-account by ID
-function switchSubAccountById(subAccountId) {
-    currentSubAccount = subAccounts.find(sa => sa.id === subAccountId);
-    if (currentSubAccount) {
-        updateSubAccountSelectors();
-        updateCredentialsDisplay();
-        loadKeys(); // Reload keys for this sub-account
-    }
-}
-
-// Update credentials display
-function updateCredentialsDisplay() {
-    const credentialsDisplay = document.getElementById('credentials-display');
-    const noSubAccountMsg = document.getElementById('no-subaccount-message');
-    
-    if (currentSubAccount) {
-        if (credentialsDisplay) credentialsDisplay.style.display = 'block';
-        if (noSubAccountMsg) noSubAccountMsg.style.display = 'none';
-        
-        const accountIdEl = document.getElementById('account-id');
-        const apiTokenEl = document.getElementById('api-token');
-        const accountUsernameEl = document.getElementById('account-username');
-        const codeAccountId = document.getElementById('code-account-id');
-        const codeApiToken = document.getElementById('code-api-token');
-        
-        if (accountIdEl) accountIdEl.textContent = currentSubAccount.accountId;
-        if (apiTokenEl) apiTokenEl.textContent = currentSubAccount.apiToken;
-        if (accountUsernameEl) accountUsernameEl.textContent = currentUser.username;
-        if (codeAccountId) codeAccountId.textContent = currentSubAccount.accountId;
-        if (codeApiToken) codeApiToken.textContent = currentSubAccount.apiToken;
-    } else {
-        if (credentialsDisplay) credentialsDisplay.style.display = 'none';
-        if (noSubAccountMsg) noSubAccountMsg.style.display = 'block';
-    }
-}
-
-// Show create sub-account modal
-function showCreateSubAccountModal() {
-    const name = prompt('Enter a name for your new sub-account:');
-    if (!name || name.trim().length === 0) return;
-    
-    createSubAccount(name.trim());
-}
-
-// Create sub-account
-async function createSubAccount(name) {
-    try {
-        const response = await fetch(`${API}/subaccounts/create`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: currentToken, name: name })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            await loadSubAccounts();
-            // Auto-select the new sub-account
-            if (data.subAccount) {
-                switchSubAccountById(data.subAccount.id);
-            }
-            alert('Sub-account created successfully!');
-        } else {
-            alert('Error: ' + data.message);
-        }
-    } catch (error) {
-        alert('Failed to create sub-account. Please try again.');
-    }
-}
-
-// Edit sub-account
-async function editSubAccount(subAccountId) {
-    const subAccount = subAccounts.find(sa => sa.id === subAccountId);
-    if (!subAccount) return;
-    
-    const newName = prompt('Enter new name:', subAccount.name);
-    if (!newName || newName.trim().length === 0) return;
-    
-    try {
-        const response = await fetch(`${API}/subaccounts/update`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: currentToken, subAccountId: subAccountId, name: newName.trim() })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            await loadSubAccounts();
-            alert('Sub-account updated successfully!');
-        } else {
-            alert('Error: ' + data.message);
-        }
-    } catch (error) {
-        alert('Failed to update sub-account. Please try again.');
-    }
-}
-
-// Delete sub-account
-async function deleteSubAccount(subAccountId) {
-    const subAccount = subAccounts.find(sa => sa.id === subAccountId);
-    if (!subAccount) return;
-    
-    if (!confirm(`Are you sure you want to delete "${subAccount.name}"? This will also delete all keys associated with it.`)) {
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API}/subaccounts/delete`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: currentToken, subAccountId: subAccountId })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            // If deleted sub-account was current, clear selection
-            if (currentSubAccount && currentSubAccount.id === subAccountId) {
-                currentSubAccount = null;
-            }
-            await loadSubAccounts();
-            updateCredentialsDisplay();
-            loadKeys();
-            alert('Sub-account deleted successfully!');
-        } else {
-            alert('Error: ' + data.message);
-        }
-    } catch (error) {
-        alert('Failed to delete sub-account. Please try again.');
-    }
-}
-
-// Escape HTML
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
 // Generate key
 async function generateKey() {
     const format = document.getElementById('format').value;
     const duration = document.getElementById('duration').value;
     const amount = document.getElementById('amount').value;
-    const program = document.getElementById('program').value;
-    const subAccountId = document.getElementById('subaccount-key-gen').value;
-    
-    if (!subAccountId) {
-        alert('Please select a sub-account');
-        return;
-    }
     
     if (!format || !format.includes('*')) {
         alert('Format must include at least one * for random characters');
-        return;
-    }
-    
-    // Validate program
-    if (!userPrograms.includes(program)) {
-        alert(`Invalid program. Available programs: ${userPrograms.join(', ')}`);
         return;
     }
     
@@ -634,7 +216,7 @@ async function generateKey() {
         const response = await fetch(`${API}/keys/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: currentToken, format, duration, amount, product: program, subAccountId: subAccountId })
+            body: JSON.stringify({ token: currentToken, format, duration, amount })
         });
         
         const data = await response.json();
@@ -678,11 +260,10 @@ function copyCredential(elementId) {
 // Load all keys
 async function loadKeys() {
     try {
-        const subAccountId = currentSubAccount ? currentSubAccount.id : null;
         const response = await fetch(`${API}/keys/list`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: currentToken, subAccountId: subAccountId })
+            body: JSON.stringify({ token: currentToken })
         });
         
         const data = await response.json();
@@ -696,110 +277,71 @@ async function loadKeys() {
                 return;
             }
             
-            // Group keys by program
-            const keysByProgram = {};
-            data.keys.forEach(key => {
-                const program = key.product || 'cheat';
-                if (!keysByProgram[program]) {
-                    keysByProgram[program] = [];
+            const sortedKeys = data.keys.sort((a, b) => 
+                new Date(b.createdAt) - new Date(a.createdAt)
+            );
+            
+            sortedKeys.forEach(key => {
+                const tr = document.createElement('tr');
+                
+                let status = 'Active';
+                let statusClass = 'status-active';
+                
+                if (key.expiresAt) {
+                    const expiry = new Date(key.expiresAt);
+                    if (expiry < new Date()) {
+                        status = 'Expired';
+                        statusClass = 'status-expired';
+                    }
                 }
-                keysByProgram[program].push(key);
-            });
-            
-            // Sort keys within each program by creation date
-            Object.keys(keysByProgram).forEach(program => {
-                keysByProgram[program].sort((a, b) => 
-                    new Date(b.createdAt) - new Date(a.createdAt)
-                );
-            });
-            
-            // Display keys grouped by program
-            Object.keys(keysByProgram).forEach(program => {
-                const programKeys = keysByProgram[program];
-                // Capitalize first letter of program name
-                const programName = program.charAt(0).toUpperCase() + program.slice(1);
                 
-                // Add program header
-                const headerRow = document.createElement('tr');
-                headerRow.className = 'program-header';
-                headerRow.innerHTML = `<td colspan="8" class="program-header-cell"><strong>${programName} Keys (${programKeys.length})</strong></td>`;
-                tbody.appendChild(headerRow);
+                if (key.usedBy) {
+                    status = 'Used';
+                    statusClass = 'status-used';
+                }
                 
-                programKeys.forEach(key => {
-                    const tr = document.createElement('tr');
-                    
-                    let status = 'Active';
-                    let statusClass = 'status-active';
-                    
-                    if (key.expiresAt) {
-                        const expiry = new Date(key.expiresAt);
-                        if (expiry < new Date()) {
-                            status = 'Expired';
-                            statusClass = 'status-expired';
-                        }
-                    }
-                    
-                    if (key.usedBy) {
-                        status = 'Used';
-                        statusClass = 'status-used';
-                    }
-                    
-                    // Determine expiry text: check if it's lifetime or just unused
-                    let expiryText = 'Never';
-                    if (key.expiresAt) {
-                        expiryText = new Date(key.expiresAt).toLocaleString();
-                    } else {
-                        // Normalize duration (remove 's' from end) to check for lifetime
-                        const normalizedDuration = key.duration ? key.duration.toLowerCase().replace(/s$/, '') : '';
-                        if (normalizedDuration === 'lifetime') {
-                            expiryText = 'Lifetime';
-                        } else if (!key.usedAt) {
-                            // Key hasn't been used yet - show duration instead of "Never"
-                            const duration = key.duration || 'days';
-                            const amount = key.amount || 1;
-                            expiryText = `Not used (${amount} ${duration})`;
-                        }
-                    }
-                    
-                    const ip = key.ip || '-';
-                    const lastCheck = key.lastCheck 
-                        ? new Date(key.lastCheck).toLocaleString() 
-                        : '-';
-                    
-                    // HWID Lock display with hover tooltip
-                    let hwidDisplay = '';
-                    if (key.hwid) {
-                        hwidDisplay = `
-                            <div class="hwid-container">
-                                <span class="hwid-indicator"><i class="fas fa-lock"></i> Locked</span>
-                                <div class="hwid-tooltip">
-                                    <code>${key.hwid}</code>
-                                </div>
+                const expiryText = key.expiresAt 
+                    ? new Date(key.expiresAt).toLocaleString() 
+                    : 'Never';
+                
+                const ip = key.ip || '-';
+                const lastCheck = key.lastCheck 
+                    ? new Date(key.lastCheck).toLocaleString() 
+                    : '-';
+                
+                // HWID Lock display with hover tooltip
+                let hwidDisplay = '';
+                if (key.hwid) {
+                    hwidDisplay = `
+                        <div class="hwid-container">
+                            <span class="hwid-indicator"><i class="fas fa-lock"></i> Locked</span>
+                            <div class="hwid-tooltip">
+                                <code>${key.hwid}</code>
                             </div>
-                        `;
-                    } else {
-                        hwidDisplay = '<span class="hwid-indicator"><i class="fas fa-unlock"></i> Not Locked</span>';
-                    }
-                    
-                    tr.innerHTML = `
-                        <td><code>${key.key}</code></td>
-                        <td><span class="status ${statusClass}">${status}</span></td>
-                        <td>${expiryText}</td>
-                        <td>${hwidDisplay}</td>
-                        <td>${ip}</td>
-                        <td>${new Date(key.createdAt).toLocaleString()}</td>
-                        <td>${lastCheck}</td>
-                        <td>
-                            <div class="table-actions">
-                                <button class="table-action-btn" onclick="openAddTimeModal('${key.key}')" title="Add Time"><i class="fas fa-clock"></i></button>
-                                <button class="table-action-btn" onclick="resetHWID('${key.key}')" ${!key.hwid ? 'disabled' : ''} title="Reset HWID"><i class="fas fa-unlock-alt"></i></button>
-                                <button class="table-action-btn table-action-btn-danger" onclick="deleteKey('${key.key}')" title="Delete"><i class="fas fa-trash"></i></button>
-                            </div>
-                        </td>
+                        </div>
                     `;
-                    
-                    tbody.appendChild(tr);
-                });
+                } else {
+                    hwidDisplay = '<span class="hwid-indicator"><i class="fas fa-unlock"></i> Not Locked</span>';
+                }
+                
+                tr.innerHTML = `
+                    <td><code>${key.key}</code></td>
+                    <td><span class="status ${statusClass}">${status}</span></td>
+                    <td>${expiryText}</td>
+                    <td>${hwidDisplay}</td>
+                    <td>${ip}</td>
+                    <td>${new Date(key.createdAt).toLocaleString()}</td>
+                    <td>${lastCheck}</td>
+                    <td>
+                        <div class="table-actions">
+                            <button class="table-action-btn" onclick="openAddTimeModal('${key.key}')" title="Add Time"><i class="fas fa-clock"></i></button>
+                            <button class="table-action-btn" onclick="resetHWID('${key.key}')" ${!key.hwid ? 'disabled' : ''} title="Reset HWID"><i class="fas fa-unlock-alt"></i></button>
+                            <button class="table-action-btn table-action-btn-danger" onclick="deleteKey('${key.key}')" title="Delete"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </td>
+                `;
+                
+                tbody.appendChild(tr);
             });
         }
     } catch (error) {
@@ -1439,7 +981,7 @@ async function viewUserDetails(userId) {
                     html += `<tr>
                         <td><code style="font-size: 0.75rem;">${escapeHtml(key.key)}</code></td>
                         <td>${key.amount || ''} ${key.duration || ''}</td>
-                        <td>${key.expiresAt ? new Date(key.expiresAt).toLocaleDateString() : ((key.duration && key.duration.toLowerCase().replace(/s$/, '') === 'lifetime') ? 'Lifetime' : (!key.usedAt ? `Not used (${key.amount || ''} ${key.duration || ''})` : 'Never'))}</td>
+                        <td>${key.expiresAt ? new Date(key.expiresAt).toLocaleDateString() : 'Never'}</td>
                         <td><code style="font-size: 0.7rem;">${key.hwid || 'Not locked'}</code></td>
                         <td>${key.ip || 'N/A'}</td>
                         <td>${key.usedAt ? new Date(key.usedAt).toLocaleString() : 'Never'}</td>
@@ -1727,11 +1269,11 @@ async function deleteInvite(invite, hash) {
     }
 }
 
-async function uploadUpdate(program) {
-    const fileInput = document.getElementById(`update-file-${program}`);
-    const versionInput = document.getElementById(`update-version-${program}`);
-    const changelogInput = document.getElementById(`update-changelog-${program}`);
-    const statusDiv = document.getElementById(`update-status-${program}`);
+async function uploadUpdate() {
+    const fileInput = document.getElementById('update-file');
+    const versionInput = document.getElementById('update-version');
+    const changelogInput = document.getElementById('update-changelog');
+    const statusDiv = document.getElementById('upload-status');
     
     if (!versionInput.value || versionInput.value.trim() === '') {
         statusDiv.innerHTML = '<div style="color: #ef4444;">Please enter a version number</div>';
@@ -1761,7 +1303,6 @@ async function uploadUpdate(program) {
     formData.append('changelog', changelogInput.value.trim() || 'No changes specified');
     formData.append('username', username);
     formData.append('password', password);
-    formData.append('program', program);
     
     try {
         const response = await fetch(`${API.replace('/api', '')}/api/admin/upload`, {
@@ -1775,8 +1316,7 @@ async function uploadUpdate(program) {
             statusDiv.innerHTML = `<div style="color: #22c55e;">✅ Upload successful! Version: ${data.version}, File: ${data.filename}, Size: ${(data.size / 1024 / 1024).toFixed(2)} MB</div>`;
             fileInput.value = '';
             versionInput.value = '';
-            changelogInput.value = '';
-            checkUpdateInfo(program);
+            checkUpdateInfo();
         } else {
             statusDiv.innerHTML = `<div style="color: #ef4444;">❌ Error: ${data.message}</div>`;
         }

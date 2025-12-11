@@ -12,11 +12,6 @@ const DB_FILE = path.join(__dirname, 'database.json');
 const INVITES_FILE = path.join(__dirname, 'invites.json');
 const UPDATES_DIR = path.join(__dirname, 'updates');
 const UPDATE_INFO_FILE = path.join(__dirname, 'update_info.json');
-// Program-specific update directories
-const CHEAT_UPDATES_DIR = path.join(__dirname, 'updates', 'cheat');
-const SPOOFER_UPDATES_DIR = path.join(__dirname, 'updates', 'spoofer');
-const CHEAT_UPDATE_INFO_FILE = path.join(__dirname, 'update_info_cheat.json');
-const SPOOFER_UPDATE_INFO_FILE = path.join(__dirname, 'update_info_spoofer.json');
 const ADMIN_USERNAME = 'K7mP9xQ2vR5wN8bL3jF6hT4'; // Hardcoded admin username
 const ADMIN_PASSWORD = 'X9zA4cM7nB2dG8kY5pV1sW6'; // Hardcoded admin password
 const BOT_API_KEY = process.env.BOT_API_KEY || crypto.createHash('sha256').update(ADMIN_USERNAME + ADMIN_PASSWORD + 'BOT_SECRET_2024').digest('hex'); // Bot-only API key
@@ -51,8 +46,7 @@ const userSchema = new mongoose.Schema({
     lockedUntil: String,
     accountType: { type: String, default: 'user' }, // 'user', 'reseller', 'admin'
     balance: { type: Number, default: 0 }, // For resellers, balance in dollars
-    allowedProducts: { type: [String], default: [] }, // Products reseller can generate keys for
-    programs: { type: [String], default: ['cheat', 'spoofer'] } // Available programs for this account (customizable)
+    allowedProducts: { type: [String], default: [] } // Products reseller can generate keys for
 });
 
 const inviteSchema = new mongoose.Schema({
@@ -81,21 +75,8 @@ const keySchema = new mongoose.Schema({
     ip: String,
     lastCheck: String,
     hwidLocked: Boolean,
-    product: { type: String, default: 'cheat' }, // Program name: 'cheat' or 'spoofer'
-    subAccountId: String // ID of the sub-account that generated this key
+    product: String // Product name (e.g., 'private', 'public')
 });
-
-// Sub-account/Project schema (multiple per user)
-const subAccountSchema = new mongoose.Schema({
-    id: { type: String, required: true, unique: true },
-    userId: { type: String, required: true }, // Owner user ID
-    name: { type: String, required: true }, // User-defined name
-    accountId: { type: String, required: true, unique: true }, // Unique account ID for this sub-account
-    apiToken: { type: String, required: true, unique: true }, // Unique API token for this sub-account
-    createdAt: { type: String, required: true }
-});
-
-const SubAccount = mongoose.model('SubAccount', subAccountSchema);
 
 const User = mongoose.model('User', userSchema);
 const Key = mongoose.model('Key', keySchema);
@@ -115,7 +96,7 @@ async function initDB() {
             console.error('Error details:', error.message);
             // Fallback to JSON
             if (!fs.existsSync(DB_FILE)) {
-                const initialData = { users: [], keys: [], subAccounts: [] };
+                const initialData = { users: [], keys: [] };
                 fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
             }
         }
@@ -134,12 +115,6 @@ async function initDB() {
 function initUpdatesDir() {
     if (!fs.existsSync(UPDATES_DIR)) {
         fs.mkdirSync(UPDATES_DIR, { recursive: true });
-    }
-    if (!fs.existsSync(CHEAT_UPDATES_DIR)) {
-        fs.mkdirSync(CHEAT_UPDATES_DIR, { recursive: true });
-    }
-    if (!fs.existsSync(SPOOFER_UPDATES_DIR)) {
-        fs.mkdirSync(SPOOFER_UPDATES_DIR, { recursive: true });
     }
 }
 
@@ -354,21 +329,18 @@ async function readDB() {
         try {
             const users = await User.find({}).lean();
             const keys = await Key.find({}).lean();
-            const subAccounts = await SubAccount.find({}).lean();
-            return { users, keys, subAccounts };
+            return { users, keys };
         } catch (error) {
             console.error('MongoDB read error:', error);
-            return { users: [], keys: [], subAccounts: [] };
+            return { users: [], keys: [] };
         }
     } else {
         // Fallback to JSON
         try {
             const data = fs.readFileSync(DB_FILE, 'utf8');
-            const parsed = JSON.parse(data);
-            if (!parsed.subAccounts) parsed.subAccounts = [];
-            return parsed;
+            return JSON.parse(data);
         } catch (error) {
-            return { users: [], keys: [], subAccounts: [] };
+            return { users: [], keys: [] };
         }
     }
 }
@@ -597,8 +569,7 @@ app.post('/api/auth/register', async (req, res) => {
             createdAt: new Date().toISOString(),
             token: generateToken(),
             failedLogins: 0,
-            lockedUntil: null,
-            programs: ['cheat', 'spoofer'] // Default programs for new users
+            lockedUntil: null
         };
         
         if (mongoose.connection.readyState === 1) {
@@ -1018,77 +989,6 @@ app.post('/api/account/update-username', async (req, res) => {
     }
 });
 
-// Get user's programs
-app.post('/api/account/programs', async (req, res) => {
-    const { token } = req.body;
-    
-    if (!token) {
-        return res.json({ success: false, message: 'Authentication required' });
-    }
-    
-    try {
-        const db = await readDB();
-        const user = db.users.find(u => u.token === token);
-        
-        if (!user) {
-            return res.json({ success: false, message: 'Invalid authentication' });
-        }
-        
-        // Return user's programs, default to ['cheat', 'spoofer'] if not set
-        const programs = user.programs && user.programs.length > 0 ? user.programs : ['cheat', 'spoofer'];
-        
-        res.json({ success: true, programs: programs });
-    } catch (error) {
-        console.error('Get programs error:', error);
-        res.json({ success: false, message: 'Failed to get programs' });
-    }
-});
-
-// Update user's programs
-app.post('/api/account/update-programs', async (req, res) => {
-    const { token, programs } = req.body;
-    
-    if (!token) {
-        return res.json({ success: false, message: 'Authentication required' });
-    }
-    
-    if (!programs || !Array.isArray(programs) || programs.length === 0) {
-        return res.json({ success: false, message: 'Programs must be a non-empty array' });
-    }
-    
-    // Validate program names (alphanumeric and underscores only, lowercase)
-    const validPrograms = programs.map(p => String(p).toLowerCase().trim()).filter(p => {
-        return p.length > 0 && /^[a-z0-9_]+$/.test(p);
-    });
-    
-    if (validPrograms.length === 0) {
-        return res.json({ success: false, message: 'Invalid program names. Use only lowercase letters, numbers, and underscores' });
-    }
-    
-    try {
-        const db = await readDB();
-        const user = db.users.find(u => u.token === token);
-        
-        if (!user) {
-            return res.json({ success: false, message: 'Invalid authentication' });
-        }
-        
-        // Update programs
-        user.programs = validPrograms;
-        
-        if (mongoose.connection.readyState === 1) {
-            await User.updateOne({ id: user.id }, { programs: user.programs });
-        } else {
-            await writeDB(db);
-        }
-        
-        res.json({ success: true, message: 'Programs updated successfully', programs: user.programs });
-    } catch (error) {
-        console.error('Update programs error:', error);
-        res.json({ success: false, message: 'Failed to update programs' });
-    }
-});
-
 // Delete account
 app.post('/api/account/delete', async (req, res) => {
     const { token, password } = req.body;
@@ -1131,14 +1031,10 @@ app.post('/api/account/delete', async (req, res) => {
 
 // Generate key
 app.post('/api/keys/generate', async (req, res) => {
-    const { token, format, duration, amount, product, subAccountId } = req.body;
+    const { token, format, duration, amount } = req.body;
     
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
-    }
-    
-    if (!subAccountId) {
-        return res.json({ success: false, message: 'Sub-account selection required' });
     }
     
     try {
@@ -1149,29 +1045,8 @@ app.post('/api/keys/generate', async (req, res) => {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
         
-        // Verify sub-account belongs to user
-        let subAccount = null;
-        if (mongoose.connection.readyState === 1) {
-            subAccount = await SubAccount.findOne({ id: subAccountId, userId: user.id });
-        } else {
-            if (!db.subAccounts) db.subAccounts = [];
-            subAccount = db.subAccounts.find(sa => sa.id === subAccountId && sa.userId === user.id);
-        }
-        
-        if (!subAccount) {
-            return res.json({ success: false, message: 'Invalid sub-account' });
-        }
-        
         if (!format || !format.includes('*')) {
             return res.json({ success: false, message: 'Invalid format' });
-        }
-        
-        // Validate program against user's available programs
-        const selectedProgram = product || (user.programs && user.programs.length > 0 ? user.programs[0] : 'cheat');
-        const userPrograms = user.programs && user.programs.length > 0 ? user.programs : ['cheat', 'spoofer'];
-        
-        if (!userPrograms.includes(selectedProgram)) {
-            return res.json({ success: false, message: `Invalid program. Available programs: ${userPrograms.join(', ')}` });
         }
         
         const key = generateKey(format);
@@ -1191,9 +1066,7 @@ app.post('/api/keys/generate', async (req, res) => {
             usedAt: null,
             hwid: null,
             ip: null,
-            lastCheck: null,
-            product: selectedProgram,
-            subAccountId: subAccountId
+            lastCheck: null
         };
         
         if (mongoose.connection.readyState === 1) {
@@ -1291,23 +1164,6 @@ app.post('/api/reseller/keys/generate', async (req, res) => {
         const key = generateKey(format);
         const expiresAt = null;
         
-        // Get sub-account if provided (optional for resellers)
-        let subAccountId = req.body.subAccountId || null;
-        if (subAccountId) {
-            // Verify sub-account belongs to user
-            let subAccount = null;
-            if (mongoose.connection.readyState === 1) {
-                subAccount = await SubAccount.findOne({ id: subAccountId, userId: user.id });
-            } else {
-                const db = await readDB();
-                if (!db.subAccounts) db.subAccounts = [];
-                subAccount = db.subAccounts.find(sa => sa.id === subAccountId && sa.userId === user.id);
-            }
-            if (!subAccount) {
-                return res.json({ success: false, message: 'Invalid sub-account' });
-            }
-        }
-        
         const keyEntry = {
             key: key,
             userId: user.id,
@@ -1322,8 +1178,7 @@ app.post('/api/reseller/keys/generate', async (req, res) => {
             hwid: null,
             ip: null,
             lastCheck: null,
-            product: selectedProduct,
-            subAccountId: subAccountId
+            product: selectedProduct
         };
         
         if (mongoose.connection.readyState === 1) {
@@ -1888,7 +1743,7 @@ const upload = multer({
 });
 
 app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
-    const { username, password, version, changelog, program } = req.body;
+    const { username, password, version, changelog } = req.body;
     
     // Verify admin
     if (!verifyAdmin(username, password)) {
@@ -1903,18 +1758,8 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
         return res.json({ success: false, message: 'Version is required' });
     }
     
-    // Determine program (default to 'cheat' for backward compatibility)
-    const selectedProgram = (program || 'cheat').toLowerCase();
-    if (selectedProgram !== 'cheat' && selectedProgram !== 'spoofer') {
-        return res.json({ success: false, message: 'Invalid program. Must be "cheat" or "spoofer"' });
-    }
-    
-    // Set paths based on program
-    const programDir = selectedProgram === 'cheat' ? CHEAT_UPDATES_DIR : SPOOFER_UPDATES_DIR;
-    const programInfoFile = selectedProgram === 'cheat' ? CHEAT_UPDATE_INFO_FILE : SPOOFER_UPDATE_INFO_FILE;
-    const finalPath = path.join(programDir, 'latest.exe');
-    
     // Rename file to a standard name
+    const finalPath = path.join(UPDATES_DIR, 'latest.exe');
     if (fs.existsSync(finalPath)) {
         fs.unlinkSync(finalPath); // Delete old file
     }
@@ -1925,12 +1770,11 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
         version: version.trim(),
         filename: 'latest.exe',
         size: req.file.size,
-        uploadedAt: new Date().toISOString(),
-        program: selectedProgram
+        uploadedAt: new Date().toISOString()
     };
     
     try {
-        fs.writeFileSync(programInfoFile, JSON.stringify(updateInfo, null, 2));
+        fs.writeFileSync(UPDATE_INFO_FILE, JSON.stringify(updateInfo, null, 2));
         console.log('Saved update info:', updateInfo);
     } catch (error) {
         console.error('Error saving update info:', error);
@@ -1939,10 +1783,9 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
     // Send Discord webhook notification
     const discordWebhookUrl = 'https://discord.com/api/webhooks/1447110036043071609/FOS8y4mOfXPRyG47NIXXMEFr1mLcmZyvLmwMcjw77sgfb4ym0FNHl3FQwnFPwFjLpR0K';
     const changelogText = changelog && changelog.trim() ? changelog.trim() : 'No changes specified';
-    const programName = selectedProgram === 'cheat' ? 'Fortnite Private' : 'Artic Spoofer';
     
     const embed = {
-        title: `${programName} - Update Available`,
+        title: 'Fortnite Private - Update Available',
         description: `Version ${updateInfo.version} is now available.`,
         color: 0x5865F2, // Dark blue/purple
         fields: [
@@ -1970,7 +1813,7 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
     
     const webhookPayload = {
         embeds: [embed],
-        content: `Run ${programName} again to update.`
+        content: 'Run Fortnite Private loader again to update.'
     };
     
     // Send Discord webhook (non-blocking)
@@ -2010,37 +1853,22 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
         version: updateInfo.version,
         filename: updateInfo.filename,
         size: updateInfo.size,
-        uploadedAt: updateInfo.uploadedAt,
-        program: selectedProgram
+        uploadedAt: updateInfo.uploadedAt
     });
 });
 
 // Check for updates (public endpoint for C++ client)
 app.get('/api/updates/check', (req, res) => {
     try {
-        // Get program parameter (default to 'cheat' for backward compatibility)
-        const program = (req.query.program || 'cheat').toLowerCase();
-        if (program !== 'cheat' && program !== 'spoofer') {
-            return res.json({
-                success: false,
-                hasUpdate: false,
-                error: 'Invalid program. Must be "cheat" or "spoofer"'
-            });
-        }
-        
+        const updateFile = path.join(UPDATES_DIR, 'latest.exe');
         const clientVersion = req.query.version || '';
-        
-        // Set paths based on program
-        const programDir = program === 'cheat' ? CHEAT_UPDATES_DIR : SPOOFER_UPDATES_DIR;
-        const programInfoFile = program === 'cheat' ? CHEAT_UPDATE_INFO_FILE : SPOOFER_UPDATE_INFO_FILE;
-        const updateFile = path.join(programDir, 'latest.exe');
         
         if (fs.existsSync(updateFile)) {
             // Read version info
             let updateInfo = null;
-            if (fs.existsSync(programInfoFile)) {
+            if (fs.existsSync(UPDATE_INFO_FILE)) {
                 try {
-                    updateInfo = JSON.parse(fs.readFileSync(programInfoFile, 'utf8'));
+                    updateInfo = JSON.parse(fs.readFileSync(UPDATE_INFO_FILE, 'utf8'));
                 } catch (e) {
                     console.error('Error reading update info:', e);
                 }
@@ -2079,7 +1907,7 @@ app.get('/api/updates/check', (req, res) => {
                     filename: 'latest.exe',
                     size: stats.size,
                     modifiedAt: stats.mtime.toISOString(),
-                    downloadUrl: `/api/updates/download?program=${program}`,
+                    downloadUrl: '/api/updates/download',
                     currentVersion: clientVersion || 'unknown'
                 });
             } else {
@@ -2090,15 +1918,15 @@ app.get('/api/updates/check', (req, res) => {
                     filename: 'latest.exe',
                     size: stats.size,
                     modifiedAt: stats.mtime.toISOString(),
-                    downloadUrl: `/api/updates/download?program=${program}`
+                    downloadUrl: '/api/updates/download'
                 });
             }
         } else {
             // No update file - check if we have version info from previous upload
             let lastVersion = null;
-            if (fs.existsSync(programInfoFile)) {
+            if (fs.existsSync(UPDATE_INFO_FILE)) {
                 try {
-                    const updateInfo = JSON.parse(fs.readFileSync(programInfoFile, 'utf8'));
+                    const updateInfo = JSON.parse(fs.readFileSync(UPDATE_INFO_FILE, 'utf8'));
                     lastVersion = updateInfo.version;
                 } catch (e) {
                     // Ignore error
@@ -2266,8 +2094,7 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
             token: generateToken(),
             failedLogins: 0,
             lockedUntil: null,
-            accountType: selectedAccountType,
-            programs: ['cheat', 'spoofer'] // Default programs for new users
+            accountType: selectedAccountType
         };
         
         // Add reseller-specific fields if account type is reseller
@@ -2685,15 +2512,7 @@ app.post('/api/admin/invites/cleanup', requireAdmin, async (req, res) => {
 
 // Download update file (public endpoint for C++ client)
 app.get('/api/updates/download', (req, res) => {
-    // Get program parameter (default to 'cheat' for backward compatibility)
-    const program = (req.query.program || 'cheat').toLowerCase();
-    if (program !== 'cheat' && program !== 'spoofer') {
-        return res.status(400).json({ success: false, message: 'Invalid program. Must be "cheat" or "spoofer"' });
-    }
-    
-    // Set path based on program
-    const programDir = program === 'cheat' ? CHEAT_UPDATES_DIR : SPOOFER_UPDATES_DIR;
-    const updateFile = path.join(programDir, 'latest.exe');
+    const updateFile = path.join(UPDATES_DIR, 'latest.exe');
     
     if (!fs.existsSync(updateFile)) {
         return res.status(404).json({ success: false, message: 'Update file not found' });
