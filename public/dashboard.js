@@ -203,6 +203,7 @@ async function generateKey() {
     const format = document.getElementById('format').value;
     const duration = document.getElementById('duration').value;
     const amount = document.getElementById('amount').value;
+    const program = document.getElementById('program').value;
     
     if (!format || !format.includes('*')) {
         alert('Format must include at least one * for random characters');
@@ -216,7 +217,7 @@ async function generateKey() {
         const response = await fetch(`${API}/keys/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: currentToken, format, duration, amount })
+            body: JSON.stringify({ token: currentToken, format, duration, amount, product: program })
         });
         
         const data = await response.json();
@@ -277,71 +278,109 @@ async function loadKeys() {
                 return;
             }
             
-            const sortedKeys = data.keys.sort((a, b) => 
-                new Date(b.createdAt) - new Date(a.createdAt)
-            );
+            // Group keys by program
+            const keysByProgram = {};
+            data.keys.forEach(key => {
+                const program = key.product || 'cheat';
+                if (!keysByProgram[program]) {
+                    keysByProgram[program] = [];
+                }
+                keysByProgram[program].push(key);
+            });
             
-            sortedKeys.forEach(key => {
-                const tr = document.createElement('tr');
+            // Sort keys within each program by creation date
+            Object.keys(keysByProgram).forEach(program => {
+                keysByProgram[program].sort((a, b) => 
+                    new Date(b.createdAt) - new Date(a.createdAt)
+                );
+            });
+            
+            // Display keys grouped by program
+            Object.keys(keysByProgram).forEach(program => {
+                const programKeys = keysByProgram[program];
+                const programName = program === 'cheat' ? 'Cheat' : 'Spoofer';
                 
-                let status = 'Active';
-                let statusClass = 'status-active';
+                // Add program header
+                const headerRow = document.createElement('tr');
+                headerRow.className = 'program-header';
+                headerRow.innerHTML = `<td colspan="8" class="program-header-cell"><strong>${programName} Keys (${programKeys.length})</strong></td>`;
+                tbody.appendChild(headerRow);
                 
-                if (key.expiresAt) {
-                    const expiry = new Date(key.expiresAt);
-                    if (expiry < new Date()) {
-                        status = 'Expired';
-                        statusClass = 'status-expired';
+                programKeys.forEach(key => {
+                    const tr = document.createElement('tr');
+                    
+                    let status = 'Active';
+                    let statusClass = 'status-active';
+                    
+                    if (key.expiresAt) {
+                        const expiry = new Date(key.expiresAt);
+                        if (expiry < new Date()) {
+                            status = 'Expired';
+                            statusClass = 'status-expired';
+                        }
                     }
-                }
-                
-                if (key.usedBy) {
-                    status = 'Used';
-                    statusClass = 'status-used';
-                }
-                
-                const expiryText = key.expiresAt 
-                    ? new Date(key.expiresAt).toLocaleString() 
-                    : 'Never';
-                
-                const ip = key.ip || '-';
-                const lastCheck = key.lastCheck 
-                    ? new Date(key.lastCheck).toLocaleString() 
-                    : '-';
-                
-                // HWID Lock display with hover tooltip
-                let hwidDisplay = '';
-                if (key.hwid) {
-                    hwidDisplay = `
-                        <div class="hwid-container">
-                            <span class="hwid-indicator"><i class="fas fa-lock"></i> Locked</span>
-                            <div class="hwid-tooltip">
-                                <code>${key.hwid}</code>
+                    
+                    if (key.usedBy) {
+                        status = 'Used';
+                        statusClass = 'status-used';
+                    }
+                    
+                    // Determine expiry text: check if it's lifetime or just unused
+                    let expiryText = 'Never';
+                    if (key.expiresAt) {
+                        expiryText = new Date(key.expiresAt).toLocaleString();
+                    } else {
+                        // Normalize duration (remove 's' from end) to check for lifetime
+                        const normalizedDuration = key.duration ? key.duration.toLowerCase().replace(/s$/, '') : '';
+                        if (normalizedDuration === 'lifetime') {
+                            expiryText = 'Lifetime';
+                        } else if (!key.usedAt) {
+                            // Key hasn't been used yet - show duration instead of "Never"
+                            const duration = key.duration || 'days';
+                            const amount = key.amount || 1;
+                            expiryText = `Not used (${amount} ${duration})`;
+                        }
+                    }
+                    
+                    const ip = key.ip || '-';
+                    const lastCheck = key.lastCheck 
+                        ? new Date(key.lastCheck).toLocaleString() 
+                        : '-';
+                    
+                    // HWID Lock display with hover tooltip
+                    let hwidDisplay = '';
+                    if (key.hwid) {
+                        hwidDisplay = `
+                            <div class="hwid-container">
+                                <span class="hwid-indicator"><i class="fas fa-lock"></i> Locked</span>
+                                <div class="hwid-tooltip">
+                                    <code>${key.hwid}</code>
+                                </div>
                             </div>
-                        </div>
+                        `;
+                    } else {
+                        hwidDisplay = '<span class="hwid-indicator"><i class="fas fa-unlock"></i> Not Locked</span>';
+                    }
+                    
+                    tr.innerHTML = `
+                        <td><code>${key.key}</code></td>
+                        <td><span class="status ${statusClass}">${status}</span></td>
+                        <td>${expiryText}</td>
+                        <td>${hwidDisplay}</td>
+                        <td>${ip}</td>
+                        <td>${new Date(key.createdAt).toLocaleString()}</td>
+                        <td>${lastCheck}</td>
+                        <td>
+                            <div class="table-actions">
+                                <button class="table-action-btn" onclick="openAddTimeModal('${key.key}')" title="Add Time"><i class="fas fa-clock"></i></button>
+                                <button class="table-action-btn" onclick="resetHWID('${key.key}')" ${!key.hwid ? 'disabled' : ''} title="Reset HWID"><i class="fas fa-unlock-alt"></i></button>
+                                <button class="table-action-btn table-action-btn-danger" onclick="deleteKey('${key.key}')" title="Delete"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </td>
                     `;
-                } else {
-                    hwidDisplay = '<span class="hwid-indicator"><i class="fas fa-unlock"></i> Not Locked</span>';
-                }
-                
-                tr.innerHTML = `
-                    <td><code>${key.key}</code></td>
-                    <td><span class="status ${statusClass}">${status}</span></td>
-                    <td>${expiryText}</td>
-                    <td>${hwidDisplay}</td>
-                    <td>${ip}</td>
-                    <td>${new Date(key.createdAt).toLocaleString()}</td>
-                    <td>${lastCheck}</td>
-                    <td>
-                        <div class="table-actions">
-                            <button class="table-action-btn" onclick="openAddTimeModal('${key.key}')" title="Add Time"><i class="fas fa-clock"></i></button>
-                            <button class="table-action-btn" onclick="resetHWID('${key.key}')" ${!key.hwid ? 'disabled' : ''} title="Reset HWID"><i class="fas fa-unlock-alt"></i></button>
-                            <button class="table-action-btn table-action-btn-danger" onclick="deleteKey('${key.key}')" title="Delete"><i class="fas fa-trash"></i></button>
-                        </div>
-                    </td>
-                `;
-                
-                tbody.appendChild(tr);
+                    
+                    tbody.appendChild(tr);
+                });
             });
         }
     } catch (error) {
@@ -981,7 +1020,7 @@ async function viewUserDetails(userId) {
                     html += `<tr>
                         <td><code style="font-size: 0.75rem;">${escapeHtml(key.key)}</code></td>
                         <td>${key.amount || ''} ${key.duration || ''}</td>
-                        <td>${key.expiresAt ? new Date(key.expiresAt).toLocaleDateString() : 'Never'}</td>
+                        <td>${key.expiresAt ? new Date(key.expiresAt).toLocaleDateString() : ((key.duration && key.duration.toLowerCase().replace(/s$/, '') === 'lifetime') ? 'Lifetime' : (!key.usedAt ? `Not used (${key.amount || ''} ${key.duration || ''})` : 'Never'))}</td>
                         <td><code style="font-size: 0.7rem;">${key.hwid || 'Not locked'}</code></td>
                         <td>${key.ip || 'N/A'}</td>
                         <td>${key.usedAt ? new Date(key.usedAt).toLocaleString() : 'Never'}</td>
@@ -1269,11 +1308,11 @@ async function deleteInvite(invite, hash) {
     }
 }
 
-async function uploadUpdate() {
-    const fileInput = document.getElementById('update-file');
-    const versionInput = document.getElementById('update-version');
-    const changelogInput = document.getElementById('update-changelog');
-    const statusDiv = document.getElementById('upload-status');
+async function uploadUpdate(program) {
+    const fileInput = document.getElementById(`update-file-${program}`);
+    const versionInput = document.getElementById(`update-version-${program}`);
+    const changelogInput = document.getElementById(`update-changelog-${program}`);
+    const statusDiv = document.getElementById(`update-status-${program}`);
     
     if (!versionInput.value || versionInput.value.trim() === '') {
         statusDiv.innerHTML = '<div style="color: #ef4444;">Please enter a version number</div>';
@@ -1303,6 +1342,7 @@ async function uploadUpdate() {
     formData.append('changelog', changelogInput.value.trim() || 'No changes specified');
     formData.append('username', username);
     formData.append('password', password);
+    formData.append('program', program);
     
     try {
         const response = await fetch(`${API.replace('/api', '')}/api/admin/upload`, {
@@ -1316,7 +1356,8 @@ async function uploadUpdate() {
             statusDiv.innerHTML = `<div style="color: #22c55e;">✅ Upload successful! Version: ${data.version}, File: ${data.filename}, Size: ${(data.size / 1024 / 1024).toFixed(2)} MB</div>`;
             fileInput.value = '';
             versionInput.value = '';
-            checkUpdateInfo();
+            changelogInput.value = '';
+            checkUpdateInfo(program);
         } else {
             statusDiv.innerHTML = `<div style="color: #ef4444;">❌ Error: ${data.message}</div>`;
         }
