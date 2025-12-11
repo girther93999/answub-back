@@ -1789,7 +1789,9 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
     }
     
     // Send Discord webhook notification
-    const discordWebhookUrl = 'https://discord.com/api/webhooks/1447110036043071609/FOS8y4mOfXPRyG47NIXXMEFr1mLcmZyvLmwMcjw77sgfb4ym0FNHl3FQwnFPwFjLpR0K';
+    const discordWebhookUrl = programType === 'spoofer' 
+        ? 'https://discord.com/api/webhooks/1448486054955978883/_zKu1qpl1ZiAE2b8Jiz5PS8ySHkXITqLyCXM4Mb_qHTVom7RIf7LAl5jKhkeCwRB8eL6'
+        : 'https://discord.com/api/webhooks/1448486195096191049/VUiooykJ9z3EiYekN_iBVc8ddKfcklOngPurCg6Lhu0vH1T_9rRUi1D2TJAn2cZ30Xj3';
     const changelogText = changelog && changelog.trim() ? changelog.trim() : 'No changes specified';
     const programName = programType === 'spoofer' ? 'Artic Spoofer' : 'Fortnite Private';
     
