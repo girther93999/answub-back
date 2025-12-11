@@ -51,7 +51,8 @@ const userSchema = new mongoose.Schema({
     lockedUntil: String,
     accountType: { type: String, default: 'user' }, // 'user', 'reseller', 'admin'
     balance: { type: Number, default: 0 }, // For resellers, balance in dollars
-    allowedProducts: { type: [String], default: [] } // Products reseller can generate keys for
+    allowedProducts: { type: [String], default: [] }, // Products reseller can generate keys for
+    programs: { type: [String], default: ['cheat', 'spoofer'] } // Available programs for this account (customizable)
 });
 
 const inviteSchema = new mongoose.Schema({
@@ -80,8 +81,21 @@ const keySchema = new mongoose.Schema({
     ip: String,
     lastCheck: String,
     hwidLocked: Boolean,
-    product: { type: String, default: 'cheat' } // Program name: 'cheat' or 'spoofer'
+    product: { type: String, default: 'cheat' }, // Program name: 'cheat' or 'spoofer'
+    subAccountId: String // ID of the sub-account that generated this key
 });
+
+// Sub-account/Project schema (multiple per user)
+const subAccountSchema = new mongoose.Schema({
+    id: { type: String, required: true, unique: true },
+    userId: { type: String, required: true }, // Owner user ID
+    name: { type: String, required: true }, // User-defined name
+    accountId: { type: String, required: true, unique: true }, // Unique account ID for this sub-account
+    apiToken: { type: String, required: true, unique: true }, // Unique API token for this sub-account
+    createdAt: { type: String, required: true }
+});
+
+const SubAccount = mongoose.model('SubAccount', subAccountSchema);
 
 const User = mongoose.model('User', userSchema);
 const Key = mongoose.model('Key', keySchema);
@@ -101,7 +115,7 @@ async function initDB() {
             console.error('Error details:', error.message);
             // Fallback to JSON
             if (!fs.existsSync(DB_FILE)) {
-                const initialData = { users: [], keys: [] };
+                const initialData = { users: [], keys: [], subAccounts: [] };
                 fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
             }
         }
@@ -340,18 +354,21 @@ async function readDB() {
         try {
             const users = await User.find({}).lean();
             const keys = await Key.find({}).lean();
-            return { users, keys };
+            const subAccounts = await SubAccount.find({}).lean();
+            return { users, keys, subAccounts };
         } catch (error) {
             console.error('MongoDB read error:', error);
-            return { users: [], keys: [] };
+            return { users: [], keys: [], subAccounts: [] };
         }
     } else {
         // Fallback to JSON
         try {
             const data = fs.readFileSync(DB_FILE, 'utf8');
-            return JSON.parse(data);
+            const parsed = JSON.parse(data);
+            if (!parsed.subAccounts) parsed.subAccounts = [];
+            return parsed;
         } catch (error) {
-            return { users: [], keys: [] };
+            return { users: [], keys: [], subAccounts: [] };
         }
     }
 }
@@ -580,7 +597,8 @@ app.post('/api/auth/register', async (req, res) => {
             createdAt: new Date().toISOString(),
             token: generateToken(),
             failedLogins: 0,
-            lockedUntil: null
+            lockedUntil: null,
+            programs: ['cheat', 'spoofer'] // Default programs for new users
         };
         
         if (mongoose.connection.readyState === 1) {
@@ -1000,6 +1018,77 @@ app.post('/api/account/update-username', async (req, res) => {
     }
 });
 
+// Get user's programs
+app.post('/api/account/programs', async (req, res) => {
+    const { token } = req.body;
+    
+    if (!token) {
+        return res.json({ success: false, message: 'Authentication required' });
+    }
+    
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        // Return user's programs, default to ['cheat', 'spoofer'] if not set
+        const programs = user.programs && user.programs.length > 0 ? user.programs : ['cheat', 'spoofer'];
+        
+        res.json({ success: true, programs: programs });
+    } catch (error) {
+        console.error('Get programs error:', error);
+        res.json({ success: false, message: 'Failed to get programs' });
+    }
+});
+
+// Update user's programs
+app.post('/api/account/update-programs', async (req, res) => {
+    const { token, programs } = req.body;
+    
+    if (!token) {
+        return res.json({ success: false, message: 'Authentication required' });
+    }
+    
+    if (!programs || !Array.isArray(programs) || programs.length === 0) {
+        return res.json({ success: false, message: 'Programs must be a non-empty array' });
+    }
+    
+    // Validate program names (alphanumeric and underscores only, lowercase)
+    const validPrograms = programs.map(p => String(p).toLowerCase().trim()).filter(p => {
+        return p.length > 0 && /^[a-z0-9_]+$/.test(p);
+    });
+    
+    if (validPrograms.length === 0) {
+        return res.json({ success: false, message: 'Invalid program names. Use only lowercase letters, numbers, and underscores' });
+    }
+    
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        // Update programs
+        user.programs = validPrograms;
+        
+        if (mongoose.connection.readyState === 1) {
+            await User.updateOne({ id: user.id }, { programs: user.programs });
+        } else {
+            await writeDB(db);
+        }
+        
+        res.json({ success: true, message: 'Programs updated successfully', programs: user.programs });
+    } catch (error) {
+        console.error('Update programs error:', error);
+        res.json({ success: false, message: 'Failed to update programs' });
+    }
+});
+
 // Delete account
 app.post('/api/account/delete', async (req, res) => {
     const { token, password } = req.body;
@@ -1042,10 +1131,14 @@ app.post('/api/account/delete', async (req, res) => {
 
 // Generate key
 app.post('/api/keys/generate', async (req, res) => {
-    const { token, format, duration, amount } = req.body;
+    const { token, format, duration, amount, product, subAccountId } = req.body;
     
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
+    }
+    
+    if (!subAccountId) {
+        return res.json({ success: false, message: 'Sub-account selection required' });
     }
     
     try {
@@ -1056,8 +1149,29 @@ app.post('/api/keys/generate', async (req, res) => {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
         
+        // Verify sub-account belongs to user
+        let subAccount = null;
+        if (mongoose.connection.readyState === 1) {
+            subAccount = await SubAccount.findOne({ id: subAccountId, userId: user.id });
+        } else {
+            if (!db.subAccounts) db.subAccounts = [];
+            subAccount = db.subAccounts.find(sa => sa.id === subAccountId && sa.userId === user.id);
+        }
+        
+        if (!subAccount) {
+            return res.json({ success: false, message: 'Invalid sub-account' });
+        }
+        
         if (!format || !format.includes('*')) {
             return res.json({ success: false, message: 'Invalid format' });
+        }
+        
+        // Validate program against user's available programs
+        const selectedProgram = product || (user.programs && user.programs.length > 0 ? user.programs[0] : 'cheat');
+        const userPrograms = user.programs && user.programs.length > 0 ? user.programs : ['cheat', 'spoofer'];
+        
+        if (!userPrograms.includes(selectedProgram)) {
+            return res.json({ success: false, message: `Invalid program. Available programs: ${userPrograms.join(', ')}` });
         }
         
         const key = generateKey(format);
@@ -1078,7 +1192,8 @@ app.post('/api/keys/generate', async (req, res) => {
             hwid: null,
             ip: null,
             lastCheck: null,
-            product: product || 'cheat' // Default to 'cheat' if not specified
+            product: selectedProgram,
+            subAccountId: subAccountId
         };
         
         if (mongoose.connection.readyState === 1) {
@@ -1176,6 +1291,23 @@ app.post('/api/reseller/keys/generate', async (req, res) => {
         const key = generateKey(format);
         const expiresAt = null;
         
+        // Get sub-account if provided (optional for resellers)
+        let subAccountId = req.body.subAccountId || null;
+        if (subAccountId) {
+            // Verify sub-account belongs to user
+            let subAccount = null;
+            if (mongoose.connection.readyState === 1) {
+                subAccount = await SubAccount.findOne({ id: subAccountId, userId: user.id });
+            } else {
+                const db = await readDB();
+                if (!db.subAccounts) db.subAccounts = [];
+                subAccount = db.subAccounts.find(sa => sa.id === subAccountId && sa.userId === user.id);
+            }
+            if (!subAccount) {
+                return res.json({ success: false, message: 'Invalid sub-account' });
+            }
+        }
+        
         const keyEntry = {
             key: key,
             userId: user.id,
@@ -1190,7 +1322,8 @@ app.post('/api/reseller/keys/generate', async (req, res) => {
             hwid: null,
             ip: null,
             lastCheck: null,
-            product: selectedProduct
+            product: selectedProduct,
+            subAccountId: subAccountId
         };
         
         if (mongoose.connection.readyState === 1) {
@@ -2133,7 +2266,8 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
             token: generateToken(),
             failedLogins: 0,
             lockedUntil: null,
-            accountType: selectedAccountType
+            accountType: selectedAccountType,
+            programs: ['cheat', 'spoofer'] // Default programs for new users
         };
         
         // Add reseller-specific fields if account type is reseller

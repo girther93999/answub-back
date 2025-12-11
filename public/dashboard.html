@@ -205,6 +205,14 @@
                         </div>
                         
                         <div class="form-section">
+                            <label class="form-label">Sub-Account *</label>
+                            <select id="subaccount-key-gen" class="form-input" required>
+                                <option value="">Select a sub-account...</option>
+                            </select>
+                            <span class="form-hint">Select which sub-account to generate this key for</span>
+                        </div>
+                        
+                        <div class="form-section">
                             <label class="form-label">Program</label>
                             <select id="program" class="form-input">
                                 <option value="cheat" selected>Cheat</option>
@@ -264,41 +272,69 @@
                 </div>
 
                 <div class="card">
+                    <div class="card-header">
+                        <h2>Sub-Accounts</h2>
+                        <button class="btn btn-primary" onclick="showCreateSubAccountModal()">
+                            <i class="fas fa-plus"></i>
+                            <span>Create Sub-Account</span>
+                        </button>
+                    </div>
                     <div class="card-body">
-                        <div class="credentials-list">
-                            <div class="credential-item">
-                                <div class="credential-label">
-                                    <i class="fas fa-id-card"></i>
-                                    <span>Account ID</span>
+                        <div id="subaccounts-list" class="loading">Loading sub-accounts...</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="form-section" style="margin-bottom: 1.5rem;">
+                            <label class="form-label">Select Sub-Account</label>
+                            <select id="subaccount-selector" class="form-input" onchange="switchSubAccount()">
+                                <option value="">Loading...</option>
+                            </select>
+                            <span class="form-hint">Select which sub-account to use for key generation and view credentials</span>
+                        </div>
+                        
+                        <div id="credentials-display" style="display: none;">
+                            <div class="credentials-list">
+                                <div class="credential-item">
+                                    <div class="credential-label">
+                                        <i class="fas fa-id-card"></i>
+                                        <span>Account ID</span>
+                                    </div>
+                                    <div class="credential-value">
+                                        <code id="account-id"></code>
+                                        <button class="btn-icon" onclick="copyCredential('account-id')" title="Copy">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
                                 </div>
-                                <div class="credential-value">
-                                    <code id="account-id"></code>
-                                    <button class="btn-icon" onclick="copyCredential('account-id')" title="Copy">
-                                        <i class="fas fa-copy"></i>
-                                    </button>
+                                <div class="credential-item">
+                                    <div class="credential-label">
+                                        <i class="fas fa-lock"></i>
+                                        <span>API Token</span>
+                                    </div>
+                                    <div class="credential-value">
+                                        <code id="api-token"></code>
+                                        <button class="btn-icon" onclick="copyCredential('api-token')" title="Copy">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="credential-item">
+                                    <div class="credential-label">
+                                        <i class="fas fa-user"></i>
+                                        <span>Username</span>
+                                    </div>
+                                    <div class="credential-value">
+                                        <code id="account-username"></code>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="credential-item">
-                                <div class="credential-label">
-                                    <i class="fas fa-lock"></i>
-                                    <span>API Token</span>
-                                </div>
-                                <div class="credential-value">
-                                    <code id="api-token"></code>
-                                    <button class="btn-icon" onclick="copyCredential('api-token')" title="Copy">
-                                        <i class="fas fa-copy"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="credential-item">
-                                <div class="credential-label">
-                                    <i class="fas fa-user"></i>
-                                    <span>Username</span>
-                                </div>
-                                <div class="credential-value">
-                                    <code id="account-username"></code>
-                                </div>
-                            </div>
+                        </div>
+                        
+                        <div id="no-subaccount-message" style="text-align: center; padding: 2rem; color: #888888;">
+                            <i class="fas fa-info-circle" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                            <p>Create a sub-account to get started. Each sub-account has its own credentials and keys.</p>
                         </div>
                         
                         <div class="integration-guide">
@@ -712,6 +748,32 @@ if (auth.validateKey(userKey)) {
                                 <button class="btn btn-primary" onclick="updatePassword()">
                                     <i class="fas fa-save"></i>
                                     <span>Update Password</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="divider"></div>
+
+                        <div class="settings-section">
+                            <div class="settings-header">
+                                <i class="fas fa-code-branch"></i>
+                                <h3>Manage Programs</h3>
+                            </div>
+                            <p class="form-hint" style="margin-bottom: 1rem;">Customize which programs you can create keys for. Program names can only contain lowercase letters, numbers, and underscores.</p>
+                            
+                            <div id="programs-list" style="margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                                <!-- Programs will be loaded here -->
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-section" style="flex: 1;">
+                                    <label class="form-label">Add New Program</label>
+                                    <input type="text" id="new-program" placeholder="e.g., my_app, tool_v2" class="form-input" style="text-transform: lowercase;">
+                                    <span class="form-hint">Use lowercase letters, numbers, and underscores only</span>
+                                </div>
+                                <button class="btn btn-primary" onclick="addProgram()" style="align-self: flex-end;">
+                                    <i class="fas fa-plus"></i>
+                                    <span>Add Program</span>
                                 </button>
                             </div>
                         </div>
