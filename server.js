@@ -12,6 +12,8 @@ const DB_FILE = path.join(__dirname, 'database.json');
 const INVITES_FILE = path.join(__dirname, 'invites.json');
 const UPDATES_DIR = path.join(__dirname, 'updates');
 const UPDATE_INFO_FILE = path.join(__dirname, 'update_info.json');
+const UPDATE_INFO_CHEAT_FILE = path.join(__dirname, 'update_info_cheat.json');
+const UPDATE_INFO_SPOOFER_FILE = path.join(__dirname, 'update_info_spoofer.json');
 const ADMIN_USERNAME = 'K7mP9xQ2vR5wN8bL3jF6hT4'; // Hardcoded admin username
 const ADMIN_PASSWORD = 'X9zA4cM7nB2dG8kY5pV1sW6'; // Hardcoded admin password
 const BOT_API_KEY = process.env.BOT_API_KEY || crypto.createHash('sha256').update(ADMIN_USERNAME + ADMIN_PASSWORD + 'BOT_SECRET_2024').digest('hex'); // Bot-only API key
@@ -1743,7 +1745,7 @@ const upload = multer({
 });
 
 app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
-    const { username, password, version, changelog } = req.body;
+    const { username, password, version, changelog, program } = req.body;
     
     // Verify admin
     if (!verifyAdmin(username, password)) {
@@ -1758,8 +1760,11 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
         return res.json({ success: false, message: 'Version is required' });
     }
     
-    // Rename file to a standard name
-    const finalPath = path.join(UPDATES_DIR, 'latest.exe');
+    // Validate program parameter
+    const programType = (program && program.trim().toLowerCase() === 'spoofer') ? 'spoofer' : 'cheat';
+    
+    // Rename file to a standard name based on program
+    const finalPath = path.join(UPDATES_DIR, programType === 'spoofer' ? 'latest_spoofer.exe' : 'latest_cheat.exe');
     if (fs.existsSync(finalPath)) {
         fs.unlinkSync(finalPath); // Delete old file
     }
@@ -1768,13 +1773,16 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
     // Save version info
     const updateInfo = {
         version: version.trim(),
-        filename: 'latest.exe',
+        filename: programType === 'spoofer' ? 'latest_spoofer.exe' : 'latest_cheat.exe',
         size: req.file.size,
-        uploadedAt: new Date().toISOString()
+        uploadedAt: new Date().toISOString(),
+        program: programType
     };
     
+    // Save to program-specific file
+    const infoFile = programType === 'spoofer' ? UPDATE_INFO_SPOOFER_FILE : UPDATE_INFO_CHEAT_FILE;
     try {
-        fs.writeFileSync(UPDATE_INFO_FILE, JSON.stringify(updateInfo, null, 2));
+        fs.writeFileSync(infoFile, JSON.stringify(updateInfo, null, 2));
         console.log('Saved update info:', updateInfo);
     } catch (error) {
         console.error('Error saving update info:', error);
@@ -1783,9 +1791,10 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
     // Send Discord webhook notification
     const discordWebhookUrl = 'https://discord.com/api/webhooks/1447110036043071609/FOS8y4mOfXPRyG47NIXXMEFr1mLcmZyvLmwMcjw77sgfb4ym0FNHl3FQwnFPwFjLpR0K';
     const changelogText = changelog && changelog.trim() ? changelog.trim() : 'No changes specified';
+    const programName = programType === 'spoofer' ? 'Artic Spoofer' : 'Fortnite Private';
     
     const embed = {
-        title: 'Fortnite Private - Update Available',
+        title: `${programName} - Update Available`,
         description: `Version ${updateInfo.version} is now available.`,
         color: 0x5865F2, // Dark blue/purple
         fields: [
@@ -1813,7 +1822,7 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
     
     const webhookPayload = {
         embeds: [embed],
-        content: 'Run Fortnite Private loader again to update.'
+        content: `Run ${programName} again to update.`
     };
     
     // Send Discord webhook (non-blocking)
@@ -1860,15 +1869,17 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
 // Check for updates (public endpoint for C++ client)
 app.get('/api/updates/check', (req, res) => {
     try {
-        const updateFile = path.join(UPDATES_DIR, 'latest.exe');
+        const program = (req.query.program && req.query.program.trim().toLowerCase() === 'spoofer') ? 'spoofer' : 'cheat';
+        const updateFile = path.join(UPDATES_DIR, program === 'spoofer' ? 'latest_spoofer.exe' : 'latest_cheat.exe');
         const clientVersion = req.query.version || '';
+        const infoFile = program === 'spoofer' ? UPDATE_INFO_SPOOFER_FILE : UPDATE_INFO_CHEAT_FILE;
         
         if (fs.existsSync(updateFile)) {
             // Read version info
             let updateInfo = null;
-            if (fs.existsSync(UPDATE_INFO_FILE)) {
+            if (fs.existsSync(infoFile)) {
                 try {
-                    updateInfo = JSON.parse(fs.readFileSync(UPDATE_INFO_FILE, 'utf8'));
+                    updateInfo = JSON.parse(fs.readFileSync(infoFile, 'utf8'));
                 } catch (e) {
                     console.error('Error reading update info:', e);
                 }
@@ -1904,10 +1915,10 @@ app.get('/api/updates/check', (req, res) => {
                     hasUpdate: true,
                     version: serverVersion,
                     serverVersion: serverVersion, // Explicit server version
-                    filename: 'latest.exe',
+                    filename: program === 'spoofer' ? 'latest_spoofer.exe' : 'latest_cheat.exe',
                     size: stats.size,
                     modifiedAt: stats.mtime.toISOString(),
-                    downloadUrl: '/api/updates/download',
+                    downloadUrl: `/api/updates/download?program=${program}`,
                     currentVersion: clientVersion || 'unknown'
                 });
             } else {
@@ -1915,18 +1926,18 @@ app.get('/api/updates/check', (req, res) => {
                 res.json({
                     success: true,
                     hasUpdate: true,
-                    filename: 'latest.exe',
+                    filename: program === 'spoofer' ? 'latest_spoofer.exe' : 'latest_cheat.exe',
                     size: stats.size,
                     modifiedAt: stats.mtime.toISOString(),
-                    downloadUrl: '/api/updates/download'
+                    downloadUrl: `/api/updates/download?program=${program}`
                 });
             }
         } else {
             // No update file - check if we have version info from previous upload
             let lastVersion = null;
-            if (fs.existsSync(UPDATE_INFO_FILE)) {
+            if (fs.existsSync(infoFile)) {
                 try {
-                    const updateInfo = JSON.parse(fs.readFileSync(UPDATE_INFO_FILE, 'utf8'));
+                    const updateInfo = JSON.parse(fs.readFileSync(infoFile, 'utf8'));
                     lastVersion = updateInfo.version;
                 } catch (e) {
                     // Ignore error
@@ -2512,16 +2523,19 @@ app.post('/api/admin/invites/cleanup', requireAdmin, async (req, res) => {
 
 // Download update file (public endpoint for C++ client)
 app.get('/api/updates/download', (req, res) => {
-    const updateFile = path.join(UPDATES_DIR, 'latest.exe');
+    const program = (req.query.program && req.query.program.trim().toLowerCase() === 'spoofer') ? 'spoofer' : 'cheat';
+    const updateFile = path.join(UPDATES_DIR, program === 'spoofer' ? 'latest_spoofer.exe' : 'latest_cheat.exe');
     
     if (!fs.existsSync(updateFile)) {
         return res.status(404).json({ success: false, message: 'Update file not found' });
     }
     
-    res.download(updateFile, 'update.exe', (err) => {
+    res.download(updateFile, program === 'spoofer' ? 'latest_spoofer.exe' : 'latest_cheat.exe', (err) => {
         if (err) {
             console.error('Download error:', err);
-            res.status(500).json({ success: false, message: 'Download failed' });
+            if (!res.headersSent) {
+                res.status(500).json({ success: false, message: 'Download failed' });
+            }
         }
     });
 });
