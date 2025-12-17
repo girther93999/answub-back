@@ -1790,8 +1790,8 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
     
     // Send Discord webhook notification
     const discordWebhookUrl = programType === 'spoofer' 
-        ? 'https://discord.com/api/webhooks/1448486054955978883/_zKu1qpl1ZiAE2b8Jiz5PS8ySHkXITqLyCXM4Mb_qHTVom7RIf7LAl5jKhkeCwRB8eL6'
-        : 'https://discord.com/api/webhooks/1448486195096191049/VUiooykJ9z3EiYekN_iBVc8ddKfcklOngPurCg6Lhu0vH1T_9rRUi1D2TJAn2cZ30Xj3';
+        ? 'https://discord.com/api/webhooks/1450664304415342875/d8jbYzhUylyEJu3bwLaBzFthlAZv3YTdY02JlaSU1HsQ45YRhqOsCR6Vn_GntxTnDOLA'
+        : 'https://discord.com/api/webhooks/1450664233888120963/_DwGpUJHnw-7WcH7h5fVuCAYmKv7xZtdFW5vzRP9rCfsKE5KK9BI_yK20ZGF6pmwTWri';
     const changelogText = changelog && changelog.trim() ? changelog.trim() : 'No changes specified';
     const programName = programType === 'spoofer' ? 'Artic Spoofer' : 'Fortnite Private';
     
@@ -2536,7 +2536,7 @@ app.get('/api/updates/download', (req, res) => {
         if (err) {
             console.error('Download error:', err);
             if (!res.headersSent) {
-                res.status(500).json({ success: false, message: 'Download failed' });
+            res.status(500).json({ success: false, message: 'Download failed' });
             }
         }
     });
