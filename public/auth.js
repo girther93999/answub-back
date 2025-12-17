@@ -138,6 +138,10 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(res => res.json())
         .then(data => {
             if (data.success) {
+                // Ensure user info is present so dashboard doesn't redirect back
+                if (data.user) {
+                    localStorage.setItem('artic_user', JSON.stringify(data.user));
+                }
                 // Redirect based on account type
                 if (data.accountType === 'reseller') {
                     window.location.href = 'reseller.html';
