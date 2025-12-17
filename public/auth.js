@@ -126,36 +126,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Clear any local keys (security measure)
     clearLocalKeys();
     
-    // Check if already logged in
-    const token = localStorage.getItem('artic_token');
-    if (token) {
-        // Verify token is still valid before redirecting
-        fetch(`${API}/auth/verify`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                // Redirect based on account type
-                if (data.accountType === 'reseller') {
-                    window.location.href = 'reseller.html';
-                } else {
-                    window.location.href = 'dashboard.html';
-                }
-            } else {
-                // Invalid token, clear it
-                localStorage.removeItem('artic_token');
-                localStorage.removeItem('artic_user');
-                // Don't show error - just stay on login page
-            }
-        })
-        .catch(() => {
-            // Connection error, just stay on login page
-        });
-    }
-    
     document.getElementById('login-password')?.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') login();
     });
