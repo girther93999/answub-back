@@ -44,11 +44,13 @@ const userSchema = new mongoose.Schema({
     token: { type: String, required: true },
     createdAt: { type: String, required: true },
     lastLogin: String,
+    lastIp: String,
     failedLogins: { type: Number, default: 0 },
     lockedUntil: String,
     accountType: { type: String, default: 'user' }, // 'user', 'reseller', 'admin'
     balance: { type: Number, default: 0 }, // For resellers, balance in dollars
-    allowedProducts: { type: [String], default: [] } // Products reseller can generate keys for
+    allowedProducts: { type: [String], default: [] }, // Products reseller can generate keys for
+    banned: { type: Boolean, default: false }
 });
 
 const inviteSchema = new mongoose.Schema({
@@ -775,10 +777,14 @@ app.post('/api/auth/login', async (req, res) => {
         if (!user.token) {
             user.token = generateToken();
         }
+        if (user.banned) {
+            return res.json({ success: false, message: 'Account banned. Contact support.' });
+        }
+        user.lastIp = clientIp;
         user.lastLogin = new Date().toISOString();
         
         if (mongoose.connection.readyState === 1) {
-            await User.updateOne({ id: user.id }, { lastLogin: user.lastLogin });
+            await User.updateOne({ id: user.id }, { lastLogin: user.lastLogin, lastIp: user.lastIp });
         } else {
             await writeDB(db);
         }
@@ -834,6 +840,9 @@ app.post('/api/auth/verify', async (req, res) => {
         
         if (!user) {
             return res.json({ success: false, message: 'Session expired. Please login again.' });
+        }
+        if (user.banned) {
+            return res.json({ success: false, message: 'Account banned. Contact support.' });
         }
         
         res.json({ 
@@ -1975,6 +1984,8 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
             email: u.email,
             createdAt: u.createdAt,
             lastLogin: u.lastLogin || 'Never',
+            lastIp: u.lastIp || 'Unknown',
+            banned: !!u.banned,
             keyCount: db.keys.filter(k => k.userId === u.id).length
         }));
         res.json({ success: true, users });
@@ -2019,6 +2030,8 @@ app.get('/api/admin/users/:userId', requireAdmin, async (req, res) => {
                 allowedProducts: user.allowedProducts || [],
                 createdAt: user.createdAt,
                 lastLogin: user.lastLogin || 'Never',
+                lastIp: user.lastIp || 'Unknown',
+                banned: !!user.banned,
                 token: user.token // Include token for admin to see credentials
             },
             keys: userKeys,
@@ -2027,6 +2040,47 @@ app.get('/api/admin/users/:userId', requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Get user details error:', error);
         res.json({ success: false, message: 'Failed to fetch user details' });
+    }
+});
+
+// Ban / unban user (admin only)
+app.post('/api/admin/users/:userId/ban', requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { banned } = req.body;
+        const db = await readDB();
+        const user = db.users.find(u => u.id === userId);
+        if (!user) return res.json({ success: false, message: 'User not found' });
+        user.banned = !!banned;
+        if (mongoose.connection.readyState === 1) {
+            await User.updateOne({ id: userId }, { banned: user.banned });
+        } else {
+            await writeDB(db);
+        }
+        res.json({ success: true, banned: user.banned });
+    } catch (error) {
+        console.error('Ban user error:', error);
+        res.json({ success: false, message: 'Failed to update ban status' });
+    }
+});
+
+// Kick user (rotate token) - admin only
+app.post('/api/admin/users/:userId/kick', requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const db = await readDB();
+        const user = db.users.find(u => u.id === userId);
+        if (!user) return res.json({ success: false, message: 'User not found' });
+        user.token = generateToken();
+        if (mongoose.connection.readyState === 1) {
+            await User.updateOne({ id: userId }, { token: user.token });
+        } else {
+            await writeDB(db);
+        }
+        res.json({ success: true, token: user.token });
+    } catch (error) {
+        console.error('Kick user error:', error);
+        res.json({ success: false, message: 'Failed to kick user' });
     }
 });
 
