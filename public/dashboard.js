@@ -57,51 +57,9 @@ async function checkAuth() {
         }
         
         if (!data.success) {
-            // Token invalid - show helpful message
-            if (data.message) {
-                if (data.message.includes('Database reset') || data.message.includes('Session expired')) {
-                    // Check if we have backup data - try to restore session
-                    const backupStr = localStorage.getItem('_artic_backup');
-                    if (backupStr) {
-                        try {
-                            const backupData = JSON.parse(atob(backupStr));
-                            // Try to restore using backup token
-                            if (backupData.token) {
-                                // Verify backup token
-                                fetch(`${API}/auth/verify`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ token: backupData.token })
-                                })
-                                .then(res => res.json())
-                                .then(verifyData => {
-                                    if (verifyData.success) {
-                                        // Backup token still valid - restore session
-                                        localStorage.setItem('artic_token', backupData.token);
-                                        localStorage.setItem('artic_user', JSON.stringify(verifyData.user));
-                                        window.location.reload();
-                                    } else {
-                                        alert(`Your session expired. Your account "${backupData.username}" may still exist. Please try logging in again.`);
-                                    }
-                                })
-                                .catch(() => {
-                                    alert(`Your session expired. Your account "${backupData.username}" may still exist. Please try logging in again.`);
-                                });
-                                return false; // Don't logout yet, wait for restore attempt
-                            } else {
-                                alert(`Your session expired. Your account "${backupData.username}" may still exist. Please try logging in again.`);
-                            }
-                        } catch (e) {
-                            alert('Your session expired. Please login again.');
-                        }
-                    } else {
-                        alert('Your session expired. Please login again.');
-                    }
-                } else {
-                    console.error('Auth error:', data.message);
-                }
-            }
-            logout();
+            // Token invalid or verification failed; avoid redirect loop, just stop here
+            const msg = data.message || 'Session could not be verified. Please login again.';
+            alert(msg);
             return false;
         }
         

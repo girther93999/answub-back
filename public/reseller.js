@@ -43,7 +43,7 @@ async function checkAuth() {
         const data = await response.json();
         
         if (!data.success || data.accountType !== 'reseller') {
-            logout();
+            alert(data.message || 'Session could not be verified. Please login again.');
             return false;
         }
         
@@ -53,7 +53,7 @@ async function checkAuth() {
         return true;
     } catch (error) {
         console.error('Auth error:', error);
-        logout();
+        alert('Session verification failed. Please login again.');
         return false;
     }
 }
