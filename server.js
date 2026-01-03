@@ -1136,10 +1136,10 @@ app.post('/api/applications', async (req, res) => {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
         
-        // Generate unique IDs
+        // Generate unique IDs (same format as main account)
         const appId = 'app_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex');
-        const accountId = 'acc_' + Date.now() + '_' + crypto.randomBytes(8).toString('hex');
-        const apiToken = 'token_' + Date.now() + '_' + crypto.randomBytes(16).toString('hex');
+        const accountId = crypto.randomBytes(16).toString('hex'); // Same format as user.id
+        const apiToken = generateToken(); // Same format as user.token
         
         const application = {
             id: appId,
