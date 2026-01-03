@@ -10,34 +10,44 @@
 #include <ctime>
 
 #ifdef _WIN32
+#include <windows.h>
+#include <sddl.h>
 
 std::string AuthClient::generateHWID() {
-    std::string hwid = "";
-    
-    // Get CPU Processor ID using PowerShell
-    FILE* pipe = _popen("powershell -command \"(Get-CimInstance Win32_Processor).ProcessorId\"", "r");
-    if (pipe) {
-        char buffer[256];
-        std::string result = "";
-        while (fgets(buffer, sizeof(buffer), pipe) != NULL) {
-            result += buffer;
-        }
-        _pclose(pipe);
-        
-        // Trim whitespace
-        result.erase(0, result.find_first_not_of(" \t\n\r"));
-        result.erase(result.find_last_not_of(" \t\n\r") + 1);
-        
-        if (!result.empty() && result.length() > 5) {
-            hwid = result;
-        }
+    // Use current user SID as HWID
+    HANDLE hToken = nullptr;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
+        return "UNKNOWN";
     }
-    
-    // If we couldn't get the ProcessorId, return UNKNOWN
+
+    DWORD size = 0;
+    GetTokenInformation(hToken, TokenUser, nullptr, 0, &size);
+    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER || size == 0) {
+        CloseHandle(hToken);
+        return "UNKNOWN";
+    }
+
+    std::vector<BYTE> buffer(size);
+    TOKEN_USER* tokenUser = reinterpret_cast<TOKEN_USER*>(buffer.data());
+    if (!GetTokenInformation(hToken, TokenUser, tokenUser, size, &size)) {
+        CloseHandle(hToken);
+        return "UNKNOWN";
+    }
+
+    LPSTR sidString = nullptr;
+    if (!ConvertSidToStringSidA(tokenUser->User.Sid, &sidString) || !sidString) {
+        CloseHandle(hToken);
+        return "UNKNOWN";
+    }
+
+    std::string hwid(sidString);
+    LocalFree(sidString);
+    CloseHandle(hToken);
+
     if (hwid.empty()) {
         return "UNKNOWN";
     }
-    
+
     return hwid;
 }
 

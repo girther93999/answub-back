@@ -68,6 +68,7 @@ const keySchema = new mongoose.Schema({
     key: { type: String, required: true, unique: true },
     userId: { type: String, required: true },
     username: { type: String, required: true },
+    applicationId: String, // Application ID if key belongs to an application
     format: String,
     duration: String,
     amount: String,
@@ -82,8 +83,18 @@ const keySchema = new mongoose.Schema({
     product: String // Product name (e.g., 'private', 'public')
 });
 
+const applicationSchema = new mongoose.Schema({
+    id: { type: String, required: true, unique: true },
+    userId: { type: String, required: true },
+    name: { type: String, required: true },
+    accountId: { type: String, required: true, unique: true },
+    apiToken: { type: String, required: true, unique: true },
+    createdAt: { type: String, required: true }
+});
+
 const User = mongoose.model('User', userSchema);
 const Key = mongoose.model('Key', keySchema);
+const Application = mongoose.model('Application', applicationSchema);
 
 // Initialize database
 async function initDB() {
@@ -100,16 +111,16 @@ async function initDB() {
             console.error('Error details:', error.message);
             // Fallback to JSON
             if (!fs.existsSync(DB_FILE)) {
-                const initialData = { users: [], keys: [] };
+                const initialData = { users: [], keys: [], applications: [] };
                 fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
             }
         }
-    } else {
+        } else {
         // No MongoDB URI, use JSON file
         console.log('⚠️  No MongoDB URI found, using JSON file (data may not persist on server restart)');
         console.log('💡 To enable persistent storage, set MONGODB_URI environment variable in Render.com');
         if (!fs.existsSync(DB_FILE)) {
-            const initialData = { users: [], keys: [] };
+            const initialData = { users: [], keys: [], applications: [] };
             fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
         }
     }
@@ -333,16 +344,22 @@ async function readDB() {
         try {
             const users = await User.find({}).lean();
             const keys = await Key.find({}).lean();
-            return { users, keys };
+            const applications = await Application.find({}).lean();
+            return { users, keys, applications };
         } catch (error) {
             console.error('MongoDB read error:', error);
-            return { users: [], keys: [] };
+            return { users: [], keys: [], applications: [] };
         }
     } else {
         // Fallback to JSON
         try {
             const data = fs.readFileSync(DB_FILE, 'utf8');
-            return JSON.parse(data);
+            const parsed = JSON.parse(data);
+            // Ensure applications array exists for backward compatibility
+            if (!parsed.applications) {
+                parsed.applications = [];
+            }
+            return parsed;
         } catch (error) {
             return { users: [], keys: [] };
         }
@@ -1021,12 +1038,14 @@ app.post('/api/account/delete', async (req, res) => {
             return res.json({ success: false, message: 'Incorrect password' });
         }
         
-        // Delete all keys belonging to this user
+        // Delete all keys and applications belonging to this user
         if (mongoose.connection.readyState === 1) {
             await Key.deleteMany({ userId: user.id });
+            await Application.deleteMany({ userId: user.id });
             await User.deleteOne({ id: user.id });
         } else {
             db.keys = db.keys.filter(k => k.userId !== user.id);
+            db.applications = db.applications.filter(a => a.userId !== user.id);
             db.users = db.users.filter(u => u.id !== user.id);
             await writeDB(db);
         }
@@ -1092,6 +1111,152 @@ app.post('/api/keys/generate', async (req, res) => {
     } catch (error) {
         console.error('Generate key error:', error);
         res.json({ success: false, message: 'Failed to generate key. Please try again.' });
+    }
+});
+
+// Application Management Endpoints
+
+// Create application
+app.post('/api/applications', async (req, res) => {
+    const { token, name } = req.body;
+    
+    if (!token) {
+        return res.json({ success: false, message: 'Authentication required' });
+    }
+    
+    if (!name || name.trim().length < 2 || name.trim().length > 50) {
+        return res.json({ success: false, message: 'Application name must be 2-50 characters' });
+    }
+    
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        // Generate unique IDs
+        const appId = 'app_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex');
+        const accountId = 'acc_' + Date.now() + '_' + crypto.randomBytes(8).toString('hex');
+        const apiToken = 'token_' + Date.now() + '_' + crypto.randomBytes(16).toString('hex');
+        
+        const application = {
+            id: appId,
+            userId: user.id,
+            name: name.trim(),
+            accountId: accountId,
+            apiToken: apiToken,
+            createdAt: new Date().toISOString()
+        };
+        
+        if (mongoose.connection.readyState === 1) {
+            const appDoc = new Application(application);
+            await appDoc.save();
+        } else {
+            db.applications.push(application);
+            await writeDB(db);
+        }
+        
+        res.json({ success: true, application: application });
+    } catch (error) {
+        console.error('Create application error:', error);
+        res.json({ success: false, message: 'Failed to create application' });
+    }
+});
+
+// List user's applications
+app.get('/api/applications', async (req, res) => {
+    const token = req.headers.authorization || req.query.token;
+    
+    if (!token) {
+        return res.json({ success: false, message: 'Authentication required' });
+    }
+    
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        const applications = db.applications.filter(a => a.userId === user.id);
+        
+        res.json({ success: true, applications: applications });
+    } catch (error) {
+        console.error('List applications error:', error);
+        res.json({ success: false, message: 'Failed to list applications' });
+    }
+});
+
+// Get application details
+app.get('/api/applications/:id', async (req, res) => {
+    const token = req.headers.authorization || req.query.token;
+    const appId = req.params.id;
+    
+    if (!token) {
+        return res.json({ success: false, message: 'Authentication required' });
+    }
+    
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        const application = db.applications.find(a => a.id === appId && a.userId === user.id);
+        
+        if (!application) {
+            return res.json({ success: false, message: 'Application not found' });
+        }
+        
+        res.json({ success: true, application: application });
+    } catch (error) {
+        console.error('Get application error:', error);
+        res.json({ success: false, message: 'Failed to get application' });
+    }
+});
+
+// Delete application
+app.delete('/api/applications/:id', async (req, res) => {
+    const token = req.headers.authorization || req.query.token;
+    const appId = req.params.id;
+    
+    if (!token) {
+        return res.json({ success: false, message: 'Authentication required' });
+    }
+    
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.token === token);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'Invalid authentication' });
+        }
+        
+        const application = db.applications.find(a => a.id === appId && a.userId === user.id);
+        
+        if (!application) {
+            return res.json({ success: false, message: 'Application not found' });
+        }
+        
+        // Delete all keys associated with this application
+        if (mongoose.connection.readyState === 1) {
+            await Key.deleteMany({ applicationId: appId });
+            await Application.deleteOne({ id: appId });
+        } else {
+            db.keys = db.keys.filter(k => k.applicationId !== appId);
+            db.applications = db.applications.filter(a => a.id !== appId);
+            await writeDB(db);
+        }
+        
+        res.json({ success: true, message: 'Application deleted' });
+    } catch (error) {
+        console.error('Delete application error:', error);
+        res.json({ success: false, message: 'Failed to delete application' });
     }
 });
 
