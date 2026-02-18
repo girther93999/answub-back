@@ -2300,6 +2300,7 @@ app.post('/api/admin/keys/generate', requireAdmin, async (req, res) => {
         const keyRecord = {
             key,
             userId: user.id,
+            username: user.username, // Add username for MongoDB schema
             format,
             duration,
             amount: duration === 'lifetime' ? null : amount,
