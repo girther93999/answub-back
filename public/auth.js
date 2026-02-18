@@ -17,7 +17,7 @@ async function register() {
     const password = document.getElementById('register-password').value;
     
     if (!inviteCode || !username || !email || !password) {
-        alert('All fields are required, including invite code');
+        alert('All fields are required, including invite codes');
         return;
     }
     
