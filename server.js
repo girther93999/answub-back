@@ -2249,6 +2249,92 @@ app.post('/api/admin/users/:userId/kick', requireAdmin, async (req, res) => {
     }
 });
 
+// Generate key for user (admin only)
+app.post('/api/admin/keys/generate', requireAdmin, async (req, res) => {
+    try {
+        const { userId, format, duration, amount } = req.body;
+        const token = req.headers.authorization?.replace('Bearer ', '');
+        
+        if (!userId || !format || !duration) {
+            return res.json({ success: false, message: 'User ID, format, and duration required' });
+        }
+        
+        if (duration !== 'lifetime' && (!amount || amount < 1)) {
+            return res.json({ success: false, message: 'Amount must be at least 1 for non-lifetime keys' });
+        }
+        
+        const db = await readDB();
+        const user = db.users.find(u => u.id === userId);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+        
+        // Get admin user for logging
+        let adminUsername = 'Admin';
+        if (token) {
+            const adminUser = db.users.find(u => u.token === token);
+            if (adminUser) {
+                adminUsername = adminUser.username;
+            }
+        }
+        
+        // Generate key
+        const key = generateKey(format);
+        
+        // Calculate expiry
+        let expiresAt = null;
+        if (duration !== 'lifetime') {
+            const durationMap = { 
+                'second': 1000, 
+                'minute': 60000, 
+                'hour': 3600000, 
+                'day': 86400000, 
+                'month': 2592000000 
+            };
+            const ms = amount * (durationMap[duration] || 0);
+            expiresAt = new Date(Date.now() + ms).toISOString();
+        }
+        
+        // Create key record
+        const keyRecord = {
+            key,
+            userId: user.id,
+            format,
+            duration,
+            amount: duration === 'lifetime' ? null : amount,
+            expiresAt,
+            createdAt: new Date().toISOString(),
+            createdBy: adminUsername
+        };
+        
+        // Save key
+        db.keys.push(keyRecord);
+        
+        if (mongoose.connection.readyState === 1) {
+            const newKey = new Key(keyRecord);
+            await newKey.save();
+        } else {
+            await writeDB(db);
+        }
+        
+        console.log(`Admin ${adminUsername} generated key for user ${user.username}: ${key}`);
+        res.json({ 
+            success: true, 
+            key,
+            data: {
+                expiresAt,
+                format,
+                duration,
+                amount
+            }
+        });
+    } catch (error) {
+        console.error('Admin key generation error:', error);
+        res.json({ success: false, message: 'Failed to generate key' });
+    }
+});
+
 // Reset user password (admin only)
 app.post('/api/admin/users/:userId/reset-password', requireAdmin, async (req, res) => {
     try {
