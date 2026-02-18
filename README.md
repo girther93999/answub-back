@@ -17,7 +17,7 @@
 
 ### Local Development:
 ```bash
-npm install
+npm installd
 node server.js
 ```
 
