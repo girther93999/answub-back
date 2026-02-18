@@ -2253,7 +2253,7 @@ app.post('/api/admin/users/:userId/kick', requireAdmin, async (req, res) => {
 app.post('/api/admin/keys/generate', requireAdmin, async (req, res) => {
     try {
         const { userId, format, duration, amount } = req.body;
-        const token = req.headers.authorization?.replace('Bearer ', '');
+        const token = req.headers['authorization'];
         
         if (!userId || !format || !duration) {
             return res.json({ success: false, message: 'User ID, format, and duration required' });
