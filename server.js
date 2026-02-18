@@ -30,47 +30,6 @@ const LOCKOUT_TIME = 15 * 60 * 1000; // 15 minutes
 const adminTokens = new Map(); // token -> { username, createdAt, lastAccess }
 const ADMIN_TOKEN_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 
-// CSRF token storage (in-memory)
-const csrfTokens = new Map(); // token -> { value, createdAt, ip }
-
-// Generate CSRF token
-function generateCSRFToken(ip) {
-    const token = crypto.randomBytes(32).toString('hex');
-    csrfTokens.set(token, {
-        value: crypto.randomBytes(16).toString('hex'),
-        createdAt: Date.now(),
-        ip: ip
-    });
-    return token;
-}
-
-// Verify CSRF token
-function verifyCSRFToken(token, ip) {
-    const tokenData = csrfTokens.get(token);
-    if (!tokenData) return false;
-    
-    // Token expires after 1 hour
-    if (Date.now() - tokenData.createdAt > 60 * 60 * 1000) {
-        csrfTokens.delete(token);
-        return false;
-    }
-    
-    // IP should match
-    if (tokenData.ip !== ip) return false;
-    
-    return true;
-}
-
-// Cleanup old CSRF tokens
-function cleanupCSRFTokens() {
-    const now = Date.now();
-    for (const [token, data] of csrfTokens.entries()) {
-        if (now - data.createdAt > 60 * 60 * 1000) { // 1 hour
-            csrfTokens.delete(token);
-        }
-    }
-}
-
 // Middleware
 // HTTPS enforcement in production
 app.use((req, res, next) => {
@@ -112,42 +71,6 @@ app.use((req, res, next) => {
 app.use(cors());
 app.use(express.json({ limit: '10kb' })); // Limit payload size
 // Static file serving removed - frontend is deployed separately
-
-// CSRF protection for state-changing requests
-app.use((req, res, next) => {
-    const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
-    
-    // Skip CSRF for GET, HEAD, OPTIONS requests
-    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
-        return next();
-    }
-    
-    // Skip CSRF for API endpoints that don't need it (auth, file uploads, etc.)
-    const skipCSRF = [
-        '/api/auth/login',
-        '/api/auth/register', 
-        '/api/auth/verify',
-        '/api/auth/csrf-token',
-        '/api/keys/validate',
-        '/api/admin/upload',
-        '/api/updates/'
-    ];
-    
-    if (skipCSRF.some(path => req.path.startsWith(path))) {
-        return next();
-    }
-    
-    const csrfToken = req.headers['x-csrf-token'] || req.body._csrf;
-    
-    if (!csrfToken || !verifyCSRFToken(csrfToken, clientIp)) {
-        return res.status(403).json({ 
-            success: false, 
-            message: 'Invalid or missing CSRF token' 
-        });
-    }
-    
-    next();
-});
 
 // MongoDB Schemas
 const userSchema = new mongoose.Schema({
@@ -634,16 +557,6 @@ function addTimeToKey(expiresAt, duration, amount) {
 })();
 
 // AUTH ROUTES
-
-// Get CSRF token
-app.get('/api/auth/csrf-token', (req, res) => {
-    const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
-    const token = generateCSRFToken(clientIp);
-    res.json({ 
-        success: true, 
-        csrfToken: token 
-    });
-});
 
 // Input validation
 function validateInput(str, maxLength = 50) {
@@ -2998,7 +2911,7 @@ app.get('/api/updates/download', (req, res) => {
     });
 });
 
-// Cleanup old login attempts, admin tokens, and CSRF tokens every hour
+// Cleanup old login attempts and admin tokens every hour
 setInterval(() => {
     const now = Date.now();
     for (const [key, value] of loginAttempts.entries()) {
@@ -3007,7 +2920,6 @@ setInterval(() => {
         }
     }
     cleanupAdminTokens();
-    cleanupCSRFTokens();
 }, 60 * 60 * 1000);
 
 // Start server
