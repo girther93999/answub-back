@@ -2249,6 +2249,47 @@ app.post('/api/admin/users/:userId/kick', requireAdmin, async (req, res) => {
     }
 });
 
+// Reset user password (admin only)
+app.post('/api/admin/users/:userId/reset-password', requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { newPassword } = req.body;
+        
+        if (!newPassword) {
+            return res.json({ success: false, message: 'New password required' });
+        }
+        
+        if (newPassword.length < 6 || newPassword.length > 100) {
+            return res.json({ success: false, message: 'Password must be 6-100 characters' });
+        }
+        
+        const db = await readDB();
+        const user = db.users.find(u => u.id === userId);
+        
+        if (!user) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+        
+        // Update password
+        user.password = hashPassword(newPassword);
+        
+        // Rotate token for security
+        user.token = generateToken();
+        
+        if (mongoose.connection.readyState === 1) {
+            await User.updateOne({ id: user.id }, { password: user.password, token: user.token });
+        } else {
+            await writeDB(db);
+        }
+        
+        console.log(`Admin reset password for user: ${user.username}`);
+        res.json({ success: true, message: 'Password reset successfully' });
+    } catch (error) {
+        console.error('Reset password error:', error);
+        res.json({ success: false, message: 'Failed to reset password' });
+    }
+});
+
 // Delete user (admin only)
 app.delete('/api/admin/users/:userId', requireAdmin, async (req, res) => {
     try {
