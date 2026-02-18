@@ -127,6 +127,7 @@ app.use((req, res, next) => {
         '/api/auth/login',
         '/api/auth/register', 
         '/api/auth/verify',
+        '/api/auth/csrf-token',
         '/api/keys/validate',
         '/api/admin/upload',
         '/api/updates/'
