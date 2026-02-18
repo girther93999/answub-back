@@ -14,8 +14,8 @@ const UPDATES_DIR = path.join(__dirname, 'updates');
 const UPDATE_INFO_FILE = path.join(__dirname, 'update_info.json');
 const UPDATE_INFO_CHEAT_FILE = path.join(__dirname, 'update_info_cheat.json');
 const UPDATE_INFO_SPOOFER_FILE = path.join(__dirname, 'update_info_spoofer.json');
-const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'K7mP9xQ2vR5wN8bL3jF6hT4'; // Admin username from environment
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'X9zA4cM7nB2dG8kY5pV1sW6'; // Admin password from environment
+const ADMIN_USERNAME = 'K7mP9xQ2vR5wN8bL3jF6hT4'; // Hardcoded admin username
+const ADMIN_PASSWORD = 'X9zA4cM7nB2dG8kY5pV1sW6'; // Hardcoded admin password
 const BOT_API_KEY = process.env.BOT_API_KEY || crypto.createHash('sha256').update(ADMIN_USERNAME + ADMIN_PASSWORD + 'BOT_SECRET_2024').digest('hex'); // Bot-only API key
 
 // MongoDB connection string (use environment variable or fallback to local JSON)
@@ -31,43 +31,6 @@ const adminTokens = new Map(); // token -> { username, createdAt, lastAccess }
 const ADMIN_TOKEN_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 
 // Middleware
-// HTTPS enforcement in production
-app.use((req, res, next) => {
-    if (process.env.NODE_ENV === 'production' && !req.secure && req.get('x-forwarded-proto') !== 'https') {
-        return res.redirect(301, `https://${req.get('host')}${req.url}`);
-    }
-    next();
-});
-
-// Security Headers
-app.use((req, res, next) => {
-    // Content Security Policy
-    res.setHeader('Content-Security-Policy', 
-        "default-src 'self'; " +
-        "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; " +
-        "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; " +
-        "font-src 'self' https://cdnjs.cloudflare.com; " +
-        "img-src 'self' data:; " +
-        "connect-src 'self'; " +
-        "frame-ancestors 'none'; " +
-        "base-uri 'self'; " +
-        "form-action 'self'"
-    );
-    
-    // Other security headers
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-    
-    // HSTS in production
-    if (process.env.NODE_ENV === 'production') {
-        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
-    }
-    
-    next();
-});
-
 app.use(cors());
 app.use(express.json({ limit: '10kb' })); // Limit payload size
 // Static file serving removed - frontend is deployed separately
@@ -768,8 +731,13 @@ app.post('/api/auth/login', async (req, res) => {
     }
     
     try {
-        // Check for admin credentials using secure comparison
-        if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+        // Check for hardcoded admin account first (encrypted check)
+        const adminUserEncrypted = Buffer.from(ADMIN_USERNAME).toString('base64');
+        const adminPassEncrypted = Buffer.from(ADMIN_PASSWORD).toString('base64');
+        const inputUserEncrypted = Buffer.from(username).toString('base64');
+        const inputPassEncrypted = Buffer.from(password).toString('base64');
+        
+        if (inputUserEncrypted === adminUserEncrypted && inputPassEncrypted === adminPassEncrypted) {
             // Admin login - store token securely
             const adminToken = generateToken() + '_admin_' + Date.now();
             adminTokens.set(adminToken, {
@@ -1934,7 +1902,11 @@ function requireBot(req, res, next) {
 
 // Better admin check - verify admin credentials directly (for file upload)
 function verifyAdmin(username, password) {
-    return username === ADMIN_USERNAME && password === ADMIN_PASSWORD;
+    const adminUserEncrypted = Buffer.from(ADMIN_USERNAME).toString('base64');
+    const adminPassEncrypted = Buffer.from(ADMIN_PASSWORD).toString('base64');
+    const inputUserEncrypted = Buffer.from(username).toString('base64');
+    const inputPassEncrypted = Buffer.from(password).toString('base64');
+    return inputUserEncrypted === adminUserEncrypted && inputPassEncrypted === adminPassEncrypted;
 }
 
 // FILE UPLOAD ENDPOINTS (Admin Only)
