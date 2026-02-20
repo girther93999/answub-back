@@ -1438,39 +1438,6 @@ app.get('/api/reseller/keys', async (req, res) => {
     }
 });
 
-// Test endpoint to check filtering
-app.post('/api/test-filter', async (req, res) => {
-    try {
-        const db = await readDB();
-        const { token } = req.body;
-        const user = db.users.find(u => u.token === token);
-        
-        if (!user) {
-            return res.json({ success: false, message: 'Invalid token' });
-        }
-        
-        // Show all keys for this user
-        const allUserKeys = db.keys.filter(k => k.userId === user.id);
-        
-        // Show filtered keys
-        const filteredKeys = db.keys.filter(k => {
-            return k.userId === user.id && !k.createdBy && k.hidden !== true;
-        });
-        
-        res.json({
-            success: true,
-            userId: user.id,
-            username: user.username,
-            allKeys: allUserKeys,
-            filteredKeys: filteredKeys,
-            allKeysCount: allUserKeys.length,
-            filteredKeysCount: filteredKeys.length
-        });
-    } catch (error) {
-        res.json({ success: false, message: error.message });
-    }
-});
-
 // Get user's keys
 app.post('/api/keys/list', async (req, res) => {
     const { token } = req.body;
@@ -1488,6 +1455,21 @@ app.post('/api/keys/list', async (req, res) => {
         }
         
         // Get only this user's self-generated keys (exclude admin-generated keys)
+        console.log('=== DEBUG: User Keys Filtering ===');
+        console.log('User ID:', user.id);
+        console.log('Username:', user.username);
+        
+        const allUserKeys = db.keys.filter(k => k.userId === user.id);
+        console.log('All keys for this user:', allUserKeys.length);
+        allUserKeys.forEach((key, i) => {
+            console.log(`Key ${i+1}:`, {
+                key: key.key,
+                createdBy: key.createdBy,
+                hidden: key.hidden,
+                userId: key.userId
+            });
+        });
+        
         const userKeys = db.keys.filter(k => {
             // Must belong to this user
             if (k.userId !== user.id) return false;
@@ -1501,6 +1483,9 @@ app.post('/api/keys/list', async (req, res) => {
             // Include this key
             return true;
         });
+        
+        console.log('Filtered keys:', userKeys.length);
+        console.log('=== END DEBUG ===');
         
         res.json({ success: true, keys: userKeys });
     } catch (error) {
