@@ -1454,8 +1454,8 @@ app.post('/api/keys/list', async (req, res) => {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
         
-        // Get only this user's non-hidden keys (exclude admin-hidden keys)
-        const userKeys = db.keys.filter(k => k.userId === user.id && !k.hidden);
+        // Get only this user's non-hidden keys (exclude admin-generated keys)
+        const userKeys = db.keys.filter(k => k.userId === user.id && !k.hidden && !k.createdBy);
         
         res.json({ success: true, keys: userKeys });
     } catch (error) {
@@ -1480,8 +1480,8 @@ app.post('/api/keys/stats', async (req, res) => {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
         
-        // Get only this user's non-hidden keys (exclude admin-hidden keys)
-        const userKeys = db.keys.filter(k => k.userId === user.id && !k.hidden);
+        // Get only this user's non-hidden keys (exclude admin-generated keys)
+        const userKeys = db.keys.filter(k => k.userId === user.id && !k.hidden && !k.createdBy);
         const now = new Date();
         
         const total = userKeys.length;
