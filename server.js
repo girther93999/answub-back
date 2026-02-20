@@ -1454,38 +1454,8 @@ app.post('/api/keys/list', async (req, res) => {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
         
-        // Get only this user's self-generated keys (exclude admin-generated keys)
-        console.log('=== DEBUG: User Keys Filtering ===');
-        console.log('User ID:', user.id);
-        console.log('Username:', user.username);
-        
-        const allUserKeys = db.keys.filter(k => k.userId === user.id);
-        console.log('All keys for this user:', allUserKeys.length);
-        allUserKeys.forEach((key, i) => {
-            console.log(`Key ${i+1}:`, {
-                key: key.key,
-                createdBy: key.createdBy,
-                hidden: key.hidden,
-                userId: key.userId
-            });
-        });
-        
-        const userKeys = db.keys.filter(k => {
-            // Must belong to this user
-            if (k.userId !== user.id) return false;
-            
-            // Exclude if createdBy exists (admin-generated)
-            if (k.createdBy) return false;
-            
-            // Exclude if explicitly hidden
-            if (k.hidden === true) return false;
-            
-            // Include this key
-            return true;
-        });
-        
-        console.log('Filtered keys:', userKeys.length);
-        console.log('=== END DEBUG ===');
+        // Get only this user's non-hidden keys (exclude admin-hidden keys)
+        const userKeys = db.keys.filter(k => k.userId === user.id && !k.hidden);
         
         res.json({ success: true, keys: userKeys });
     } catch (error) {
@@ -1510,20 +1480,8 @@ app.post('/api/keys/stats', async (req, res) => {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
         
-        // Get only this user's self-generated keys (exclude admin-generated keys)
-        const userKeys = db.keys.filter(k => {
-            // Must belong to this user
-            if (k.userId !== user.id) return false;
-            
-            // Exclude if createdBy exists (admin-generated)
-            if (k.createdBy) return false;
-            
-            // Exclude if explicitly hidden
-            if (k.hidden === true) return false;
-            
-            // Include this key
-            return true;
-        });
+        // Get only this user's non-hidden keys (exclude admin-hidden keys)
+        const userKeys = db.keys.filter(k => k.userId === user.id && !k.hidden);
         const now = new Date();
         
         const total = userKeys.length;
@@ -2300,14 +2258,14 @@ app.get('/api/admin/keys', requireAdmin, async (req, res) => {
             const user = db.users.find(u => u.id === k.userId);
             return {
                 ...k,
-                username: user?.username || 'Unknown',
-                userEmail: user?.email || 'unknown@example.com'
+                username: user ? user.username : 'Unknown',
+                userEmail: user ? user.email : 'unknown@example.com'
             };
         });
         
         res.json({ success: true, keys });
     } catch (error) {
-        console.error('Admin keys error:', error);
+        console.error('List all keys error:', error);
         res.json({ success: false, message: 'Failed to load keys' });
     }
 });
