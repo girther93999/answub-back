@@ -2295,7 +2295,7 @@ app.delete('/api/admin/keys/:key', requireAdmin, async (req, res) => {
 // Generate key for user (admin only)
 app.post('/api/admin/keys/generate', requireAdmin, async (req, res) => {
     try {
-        const { userId, format, duration, amount } = req.body;
+        const { userId, format, duration, amount, hidden = true } = req.body;
         const token = req.headers['authorization'];
         
         if (!userId || !format || !duration) {
@@ -2343,7 +2343,8 @@ app.post('/api/admin/keys/generate', requireAdmin, async (req, res) => {
             hwid: null,
             ip: null,
             lastCheck: null,
-            createdBy: adminUsername
+            createdBy: adminUsername,
+            hidden: hidden // Add hidden flag - defaults to true for admin keys
         };
         
         // Save key
