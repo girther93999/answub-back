@@ -1454,8 +1454,8 @@ app.post('/api/keys/list', async (req, res) => {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
         
-        // Get only this user's keys
-        const userKeys = db.keys.filter(k => k.userId === user.id);
+        // Get only this user's self-generated keys (exclude admin-generated keys)
+        const userKeys = db.keys.filter(k => k.userId === user.id && !k.createdBy);
         
         res.json({ success: true, keys: userKeys });
     } catch (error) {
@@ -1480,7 +1480,8 @@ app.post('/api/keys/stats', async (req, res) => {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
         
-        const userKeys = db.keys.filter(k => k.userId === user.id);
+        // Get only this user's self-generated keys (exclude admin-generated keys)
+        const userKeys = db.keys.filter(k => k.userId === user.id && !k.createdBy);
         const now = new Date();
         
         const total = userKeys.length;
@@ -2246,6 +2247,48 @@ app.post('/api/admin/users/:userId/kick', requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Kick user error:', error);
         res.json({ success: false, message: 'Failed to kick user' });
+    }
+});
+
+// Get all keys (admin only)
+app.get('/api/admin/keys', requireAdmin, async (req, res) => {
+    try {
+        const db = await readDB();
+        const keys = db.keys.map(k => {
+            const user = db.users.find(u => u.id === k.userId);
+            return {
+                ...k,
+                username: user ? user.username : 'Unknown',
+                userEmail: user ? user.email : 'unknown@example.com'
+            };
+        });
+        
+        res.json({ success: true, keys });
+    } catch (error) {
+        console.error('List all keys error:', error);
+        res.json({ success: false, message: 'Failed to load keys' });
+    }
+});
+
+// Delete key (admin only)
+app.delete('/api/admin/keys/:key', requireAdmin, async (req, res) => {
+    try {
+        const { key } = req.params;
+        const db = await readDB();
+        
+        const keyIndex = db.keys.findIndex(k => k.key === key);
+        if (keyIndex === -1) {
+            return res.json({ success: false, message: 'Key not found' });
+        }
+        
+        // Remove key
+        db.keys.splice(keyIndex, 1);
+        await writeDB(db);
+        
+        res.json({ success: true, message: 'Key deleted successfully' });
+    } catch (error) {
+        console.error('Delete key error:', error);
+        res.json({ success: false, message: 'Failed to delete key' });
     }
 });
 
