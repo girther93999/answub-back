@@ -1455,7 +1455,10 @@ app.post('/api/keys/list', async (req, res) => {
         }
         
         // Get only this user's non-hidden keys (exclude admin-generated and hidden keys)
+        console.log('User ID:', user.id);
+        console.log('All keys for user:', db.keys.filter(k => k.userId === user.id));
         const userKeys = db.keys.filter(k => k.userId === user.id && !k.createdBy && k.hidden !== true);
+        console.log('Filtered keys:', userKeys);
         
         res.json({ success: true, keys: userKeys });
     } catch (error) {
@@ -2254,18 +2257,19 @@ app.post('/api/admin/users/:userId/kick', requireAdmin, async (req, res) => {
 app.get('/api/admin/keys', requireAdmin, async (req, res) => {
     try {
         const db = await readDB();
+        console.log('All keys in database:', JSON.stringify(db.keys.slice(0, 2), null, 2));
         const keys = db.keys.map(k => {
             const user = db.users.find(u => u.id === k.userId);
             return {
                 ...k,
-                username: user ? user.username : 'Unknown',
-                userEmail: user ? user.email : 'unknown@example.com'
+                username: user?.username || 'Unknown',
+                userEmail: user?.email || 'unknown@example.com'
             };
         });
         
         res.json({ success: true, keys });
     } catch (error) {
-        console.error('List all keys error:', error);
+        console.error('Admin keys error:', error);
         res.json({ success: false, message: 'Failed to load keys' });
     }
 });
