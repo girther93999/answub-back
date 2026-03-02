@@ -300,6 +300,20 @@ bool SecureConnection::checkServer() {
     return response.find("\"success\":true") != std::string::npos;
 }
 
+std::string SecureConnection::checkForUpdates(const std::string& currentVersion) {
+    std::string response = makeRequest("api/updates/check", "");
+    
+    if (response.empty() || response.find("ERROR:") != std::string::npos) {
+        return ""; // No update info available
+    }
+    
+    if (response.find("\"success\":true") == std::string::npos) {
+        return "";
+    }
+    
+    return response;
+}
+
 bool SecureConnection::validateKey(const std::string& key) {
     lastError = "";
     
