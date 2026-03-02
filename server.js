@@ -1671,19 +1671,23 @@ app.post('/api/validate', async (req, res) => {
             return res.json({ success: false, message: 'Invalid key' });
         }
         
-        // ACCOUNT VERIFICATION: Check if key belongs to the account
-        if (accountId && apiToken) {
-            // Verify the account exists and token is valid
-            const user = db.users.find(u => u.id === accountId && u.token === apiToken);
-            
-            if (!user) {
-                return res.json({ success: false, message: 'Invalid account credentials' });
-            }
-            
-            // Check if key belongs to this account
-            if (keyEntry.userId !== accountId) {
-                return res.json({ success: false, message: 'Key does not belong to this account' });
-            }
+        // ACCOUNT VERIFICATION: accountId and apiToken are required
+        if (!accountId || !apiToken) {
+            return res.json({ success: false, message: 'Application credentials required' });
+        }
+
+        // Look up the application by its accountId + apiToken (NOT in the users table)
+        const application = db.applications.find(
+            a => a.accountId === accountId && a.apiToken === apiToken
+        );
+
+        if (!application) {
+            return res.json({ success: false, message: 'Invalid application credentials' });
+        }
+
+        // Ensure the key was created by the same user who owns this application
+        if (keyEntry.userId !== application.userId) {
+            return res.json({ success: false, message: 'Key does not belong to this application\'s account' });
         }
         
         const now = new Date().toISOString();
