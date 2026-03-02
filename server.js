@@ -115,7 +115,7 @@ async function initDB() {
                 fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
             }
         }
-        } else {
+    } else {
         // No MongoDB URI, use JSON file
         console.log('⚠️  No MongoDB URI found, using JSON file (data may not persist on server restart)');
         console.log('💡 To enable persistent storage, set MONGODB_URI environment variable in Render.com');
@@ -181,7 +181,7 @@ async function initInvites() {
         "Z1A4B8C2",
         "D5E9F3G7"
     ];
-    
+
     if (mongoose.connection.readyState === 1) {
         // Use MongoDB
         try {
@@ -236,7 +236,7 @@ async function readInvites() {
         // Use MongoDB
         try {
             const invites = await Invite.find({}).sort({ createdAt: -1 });
-            return { 
+            return {
                 invites: invites.map(inv => ({
                     hash: inv.hash,
                     code: decryptInviteCode(inv.codeEncrypted) || '***',
@@ -286,7 +286,7 @@ async function readInvites() {
 async function isValidInvite(code) {
     if (!code || typeof code !== 'string') return null;
     const codeHash = hashInvite(code);
-    
+
     if (mongoose.connection.readyState === 1) {
         // Use MongoDB
         try {
@@ -312,10 +312,10 @@ async function markInviteAsUsed(invite, userId) {
         try {
             await Invite.updateOne(
                 { hash: invite.hash },
-                { 
-                    isUsed: true, 
-                    usedBy: userId, 
-                    usedAt: new Date().toISOString() 
+                {
+                    isUsed: true,
+                    usedBy: userId,
+                    usedAt: new Date().toISOString()
                 }
             );
         } catch (error) {
@@ -391,14 +391,14 @@ function generateToken() {
 function generateKey(format) {
     let key = format;
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    
+
     for (let i = 0; i < key.length; i++) {
         if (key[i] === '*') {
             const randomChar = chars[Math.floor(Math.random() * chars.length)];
             key = key.substring(0, i) + randomChar + key.substring(i + 1);
         }
     }
-    
+
     return key;
 }
 
@@ -406,11 +406,11 @@ function generateKey(format) {
 function calculateExpiry(duration, amount) {
     // Normalize duration (handle both singular and plural forms)
     const dur = duration ? duration.toLowerCase().replace(/s$/, '') : 'day';
-    
+
     if (dur === 'lifetime') {
         return null;
     }
-    
+
     // Ensure amount is a valid number
     const amt = parseInt(String(amount || 1), 10);
     if (isNaN(amt) || amt <= 0) {
@@ -419,10 +419,10 @@ function calculateExpiry(duration, amount) {
     } else {
         amount = amt;
     }
-    
+
     const now = new Date();
     const expiry = new Date(now);
-    
+
     switch (dur) {
         case 'second':
             expiry.setSeconds(now.getSeconds() + amount);
@@ -450,14 +450,14 @@ function calculateExpiry(duration, amount) {
             expiry.setDate(now.getDate() + amount);
             break;
     }
-    
+
     return expiry.toISOString();
 }
 
 // Add time to existing key
 function addTimeToKey(expiresAt, duration, amount) {
     let baseDate;
-    
+
     if (expiresAt) {
         baseDate = new Date(expiresAt);
         if (baseDate < new Date()) {
@@ -466,10 +466,10 @@ function addTimeToKey(expiresAt, duration, amount) {
     } else {
         baseDate = new Date();
     }
-    
+
     // Normalize duration (handle both singular and plural forms)
     const dur = duration ? duration.toLowerCase().replace(/s$/, '') : 'day';
-    
+
     // Ensure amount is a valid number
     const amt = parseInt(String(amount || 1), 10);
     if (isNaN(amt) || amt <= 0) {
@@ -478,9 +478,9 @@ function addTimeToKey(expiresAt, duration, amount) {
     } else {
         amount = amt;
     }
-    
+
     const newExpiry = new Date(baseDate);
-    
+
     switch (dur) {
         case 'second':
             newExpiry.setSeconds(baseDate.getSeconds() + amount);
@@ -508,7 +508,7 @@ function addTimeToKey(expiresAt, duration, amount) {
             newExpiry.setDate(baseDate.getDate() + amount);
             break;
     }
-    
+
     return newExpiry.toISOString();
 }
 
@@ -538,49 +538,49 @@ function validateEmail(email) {
 // Register
 app.post('/api/auth/register', async (req, res) => {
     const { username, email, password, inviteCode } = req.body;
-    
+
     // Input validation
     if (!username || !email || !password || !inviteCode) {
         return res.json({ success: false, message: 'All fields required, including invite code' });
     }
-    
+
     // Validate invite code
     const invite = await isValidInvite(inviteCode);
     if (!invite) {
         return res.json({ success: false, message: 'Invalid or already used invite code. Registration is invite-only.' });
     }
-    
+
     if (!validateInput(username, 30)) {
         return res.json({ success: false, message: 'Invalid username' });
     }
-    
+
     if (!validateEmail(email)) {
         return res.json({ success: false, message: 'Invalid email' });
     }
-    
+
     if (password.length < 6 || password.length > 100) {
         return res.json({ success: false, message: 'Password must be 6-100 characters' });
     }
-    
+
     try {
         const db = await readDB();
-        
+
         // Check if username already exists (case-insensitive)
-        const existingUserByUsername = db.users.find(u => 
+        const existingUserByUsername = db.users.find(u =>
             u.username && u.username.toLowerCase() === username.toLowerCase()
         );
         if (existingUserByUsername) {
             return res.json({ success: false, message: 'Username already taken. Please choose a different username.' });
         }
-        
+
         // Check if email already exists (case-insensitive)
-        const existingUserByEmail = db.users.find(u => 
+        const existingUserByEmail = db.users.find(u =>
             u.email && u.email.toLowerCase() === email.toLowerCase()
         );
         if (existingUserByEmail) {
             return res.json({ success: false, message: 'Email already registered. Please use a different email or login.' });
         }
-        
+
         // Create user
         const userData = {
             id: crypto.randomBytes(16).toString('hex'),
@@ -592,7 +592,7 @@ app.post('/api/auth/register', async (req, res) => {
             failedLogins: 0,
             lockedUntil: null
         };
-        
+
         if (mongoose.connection.readyState === 1) {
             // Save to MongoDB
             console.log('💾 Saving user to MongoDB...');
@@ -606,12 +606,12 @@ app.post('/api/auth/register', async (req, res) => {
             await writeDB(db);
             console.log(`✅ User saved to JSON: ${userData.username}`);
         }
-        
+
         // Mark invite as used
         await markInviteAsUsed(invite, userData.id);
-        
-        res.json({ 
-            success: true, 
+
+        res.json({
+            success: true,
             message: 'Account created',
             token: userData.token,
             user: {
@@ -629,38 +629,38 @@ app.post('/api/auth/register', async (req, res) => {
 // Reseller Registration (admin only - creates reseller account)
 app.post('/api/auth/register-reseller', requireAdmin, async (req, res) => {
     const { username, email, password, initialBalance, allowedProducts } = req.body;
-    
+
     if (!username || !email || !password) {
         return res.json({ success: false, message: 'Username, email, and password required' });
     }
-    
+
     if (!validateInput(username, 30)) {
         return res.json({ success: false, message: 'Invalid username' });
     }
-    
+
     if (!validateEmail(email)) {
         return res.json({ success: false, message: 'Invalid email' });
     }
-    
+
     if (password.length < 6 || password.length > 100) {
         return res.json({ success: false, message: 'Password must be 6-100 characters' });
     }
-    
+
     try {
         const db = await readDB();
-        
+
         // Check if username already exists
         const existingUser = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
         if (existingUser) {
             return res.json({ success: false, message: 'Username already taken' });
         }
-        
+
         // Check if email already exists
         const existingEmail = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
         if (existingEmail) {
             return res.json({ success: false, message: 'Email already registered' });
         }
-        
+
         // Create reseller account
         const userData = {
             id: crypto.randomBytes(16).toString('hex'),
@@ -675,7 +675,7 @@ app.post('/api/auth/register-reseller', requireAdmin, async (req, res) => {
             balance: parseFloat(initialBalance) || 0,
             allowedProducts: Array.isArray(allowedProducts) ? allowedProducts : (allowedProducts ? [allowedProducts] : ['private'])
         };
-        
+
         if (mongoose.connection.readyState === 1) {
             const user = new User(userData);
             await user.save();
@@ -683,9 +683,9 @@ app.post('/api/auth/register-reseller', requireAdmin, async (req, res) => {
             db.users.push(userData);
             await writeDB(db);
         }
-        
-        res.json({ 
-            success: true, 
+
+        res.json({
+            success: true,
             message: 'Reseller account created',
             user: {
                 id: userData.id,
@@ -706,37 +706,37 @@ app.post('/api/auth/register-reseller', requireAdmin, async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
     const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
-    
+
     if (!username || !password) {
         return res.json({ success: false, message: 'Username and password required' });
     }
-    
+
     if (!validateInput(username, 30)) {
         return res.json({ success: false, message: 'Invalid credentials' });
     }
-    
+
     // Check rate limiting by IP
     const attemptKey = `${clientIp}_${username}`;
     const attempts = loginAttempts.get(attemptKey) || { count: 0, firstAttempt: Date.now() };
-    
+
     // Reset if lockout time passed
     if (attempts.lockedUntil && Date.now() > attempts.lockedUntil) {
         loginAttempts.delete(attemptKey);
     } else if (attempts.lockedUntil) {
         const remainingMinutes = Math.ceil((attempts.lockedUntil - Date.now()) / 60000);
-        return res.json({ 
-            success: false, 
-            message: `Too many failed attempts. Try again in ${remainingMinutes} minutes.` 
+        return res.json({
+            success: false,
+            message: `Too many failed attempts. Try again in ${remainingMinutes} minutes.`
         });
     }
-    
+
     try {
         // Check for hardcoded admin account first (encrypted check)
         const adminUserEncrypted = Buffer.from(ADMIN_USERNAME).toString('base64');
         const adminPassEncrypted = Buffer.from(ADMIN_PASSWORD).toString('base64');
         const inputUserEncrypted = Buffer.from(username).toString('base64');
         const inputPassEncrypted = Buffer.from(password).toString('base64');
-        
+
         if (inputUserEncrypted === adminUserEncrypted && inputPassEncrypted === adminPassEncrypted) {
             // Admin login - store token securely
             const adminToken = generateToken() + '_admin_' + Date.now();
@@ -745,10 +745,10 @@ app.post('/api/auth/login', async (req, res) => {
                 createdAt: Date.now(),
                 lastAccess: Date.now()
             });
-            
+
             // Cleanup old admin tokens
             cleanupAdminTokens();
-            
+
             return res.json({
                 success: true,
                 token: adminToken,
@@ -761,34 +761,34 @@ app.post('/api/auth/login', async (req, res) => {
                 isAdmin: true
             });
         }
-        
+
         const db = await readDB();
         const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
-        
+
         if (!user || user.password !== hashPassword(password)) {
             // Increment failed attempts
             attempts.count++;
             attempts.firstAttempt = attempts.firstAttempt || Date.now();
-            
+
             if (attempts.count >= MAX_LOGIN_ATTEMPTS) {
                 attempts.lockedUntil = Date.now() + LOCKOUT_TIME;
                 loginAttempts.set(attemptKey, attempts);
-                return res.json({ 
-                    success: false, 
-                    message: 'Too many failed attempts. Account locked for 15 minutes.' 
+                return res.json({
+                    success: false,
+                    message: 'Too many failed attempts. Account locked for 15 minutes.'
                 });
             }
-            
+
             loginAttempts.set(attemptKey, attempts);
-            return res.json({ 
-                success: false, 
-                message: `Invalid username or password. ${MAX_LOGIN_ATTEMPTS - attempts.count} attempts remaining.` 
+            return res.json({
+                success: false,
+                message: `Invalid username or password. ${MAX_LOGIN_ATTEMPTS - attempts.count} attempts remaining.`
             });
         }
-        
+
         // Successful login - clear attempts
         loginAttempts.delete(attemptKey);
-        
+
         // Keep existing token - don't regenerate it (ensures C++ client credentials stay valid)
         // Only generate token if user doesn't have one (shouldn't happen, but safety check)
         if (!user.token) {
@@ -799,14 +799,14 @@ app.post('/api/auth/login', async (req, res) => {
         }
         user.lastIp = clientIp;
         user.lastLogin = new Date().toISOString();
-        
+
         if (mongoose.connection.readyState === 1) {
             await User.updateOne({ id: user.id }, { lastLogin: user.lastLogin, lastIp: user.lastIp });
         } else {
             await writeDB(db);
         }
-        
-        res.json({ 
+
+        res.json({
             success: true,
             token: user.token,
             user: {
@@ -826,11 +826,11 @@ app.post('/api/auth/login', async (req, res) => {
 // Verify token
 app.post('/api/auth/verify', async (req, res) => {
     const { token } = req.body;
-    
+
     if (!token) {
         return res.json({ success: false, message: 'Token required' });
     }
-    
+
     try {
         // Check if admin token first
         if (isAdminToken(token)) {
@@ -845,24 +845,24 @@ app.post('/api/auth/verify', async (req, res) => {
                 isAdmin: true
             });
         }
-        
+
         const db = await readDB();
-        
+
         // Check if database is empty
         if (!db.users || db.users.length === 0) {
             return res.json({ success: false, message: 'Database reset. Please login again.' });
         }
-        
+
         const user = db.users.find(u => u.token === token);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'Session expired. Please login again.' });
         }
         if (user.banned) {
             return res.json({ success: false, message: 'Account banned. Contact support.' });
         }
-        
-        res.json({ 
+
+        res.json({
             success: true,
             user: {
                 id: user.id,
@@ -883,37 +883,37 @@ app.post('/api/auth/verify', async (req, res) => {
 // Update password
 app.post('/api/account/update-password', async (req, res) => {
     const { token, currentPassword, newPassword } = req.body;
-    
+
     if (!token || !currentPassword || !newPassword) {
         return res.json({ success: false, message: 'All fields required' });
     }
-    
+
     if (newPassword.length < 6 || newPassword.length > 100) {
         return res.json({ success: false, message: 'Password must be 6-100 characters' });
     }
-    
+
     try {
         const db = await readDB();
         const user = db.users.find(u => u.token === token);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
-        
+
         // Verify current password
         if (user.password !== hashPassword(currentPassword)) {
             return res.json({ success: false, message: 'Current password is incorrect' });
         }
-        
+
         // Update password
         user.password = hashPassword(newPassword);
-        
+
         if (mongoose.connection.readyState === 1) {
             await User.updateOne({ id: user.id }, { password: user.password });
         } else {
             await writeDB(db);
         }
-        
+
         res.json({ success: true, message: 'Password updated successfully' });
     } catch (error) {
         console.error('Update password error:', error);
@@ -924,40 +924,40 @@ app.post('/api/account/update-password', async (req, res) => {
 // Update email
 app.post('/api/account/update-email', async (req, res) => {
     const { token, newEmail } = req.body;
-    
+
     if (!token || !newEmail) {
         return res.json({ success: false, message: 'Email required' });
     }
-    
+
     if (!validateEmail(newEmail)) {
         return res.json({ success: false, message: 'Invalid email format' });
     }
-    
+
     try {
         const db = await readDB();
         const user = db.users.find(u => u.token === token);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
-        
+
         // Check if email already exists
-        const existingUser = db.users.find(u => 
+        const existingUser = db.users.find(u =>
             u.email.toLowerCase() === newEmail.toLowerCase() && u.id !== user.id
         );
         if (existingUser) {
             return res.json({ success: false, message: 'Email already registered' });
         }
-        
+
         // Update email
         user.email = newEmail;
-        
+
         if (mongoose.connection.readyState === 1) {
             await User.updateOne({ id: user.id }, { email: user.email });
         } else {
             await writeDB(db);
         }
-        
+
         res.json({ success: true, message: 'Email updated successfully', email: newEmail });
     } catch (error) {
         console.error('Update email error:', error);
@@ -968,48 +968,48 @@ app.post('/api/account/update-email', async (req, res) => {
 // Update username
 app.post('/api/account/update-username', async (req, res) => {
     const { token, newUsername } = req.body;
-    
+
     if (!token || !newUsername) {
         return res.json({ success: false, message: 'Username required' });
     }
-    
+
     if (!validateInput(newUsername, 30)) {
         return res.json({ success: false, message: 'Invalid username' });
     }
-    
+
     try {
         const db = await readDB();
         const user = db.users.find(u => u.token === token);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
-        
+
         // Check if username already exists
-        const existingUser = db.users.find(u => 
+        const existingUser = db.users.find(u =>
             u.username.toLowerCase() === newUsername.toLowerCase() && u.id !== user.id
         );
         if (existingUser) {
             return res.json({ success: false, message: 'Username already taken' });
         }
-        
+
         // Update username in user record
         user.username = newUsername;
-        
+
         // Update username in all keys belonging to this user
         db.keys.forEach(key => {
             if (key.userId === user.id) {
                 key.username = newUsername;
             }
         });
-        
+
         if (mongoose.connection.readyState === 1) {
             await User.updateOne({ id: user.id }, { username: user.username });
             await Key.updateMany({ userId: user.id }, { username: user.username });
         } else {
             await writeDB(db);
         }
-        
+
         res.json({ success: true, message: 'Username updated successfully', username: newUsername });
     } catch (error) {
         console.error('Update username error:', error);
@@ -1020,24 +1020,24 @@ app.post('/api/account/update-username', async (req, res) => {
 // Delete account
 app.post('/api/account/delete', async (req, res) => {
     const { token, password } = req.body;
-    
+
     if (!token || !password) {
         return res.json({ success: false, message: 'Password required to delete account' });
     }
-    
+
     try {
         const db = await readDB();
         const user = db.users.find(u => u.token === token);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
-        
+
         // Verify password
         if (user.password !== hashPassword(password)) {
             return res.json({ success: false, message: 'Incorrect password' });
         }
-        
+
         // Delete all keys and applications belonging to this user
         if (mongoose.connection.readyState === 1) {
             await Key.deleteMany({ userId: user.id });
@@ -1049,7 +1049,7 @@ app.post('/api/account/delete', async (req, res) => {
             db.users = db.users.filter(u => u.id !== user.id);
             await writeDB(db);
         }
-        
+
         res.json({ success: true, message: 'Account deleted successfully' });
     } catch (error) {
         console.error('Delete account error:', error);
@@ -1061,32 +1061,33 @@ app.post('/api/account/delete', async (req, res) => {
 
 // Generate key
 app.post('/api/keys/generate', async (req, res) => {
-    const { token, format, duration, amount } = req.body;
-    
+    const { token, format, duration, amount, applicationId } = req.body;
+
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
-    
+
     try {
         const db = await readDB();
         const user = db.users.find(u => u.token === token);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
-        
+
         if (!format || !format.includes('*')) {
             return res.json({ success: false, message: 'Invalid format' });
         }
-        
+
         const key = generateKey(format);
         // Don't set expiresAt on generation - it will start when first used
         const expiresAt = null;
-        
+
         const keyEntry = {
             key: key,
             userId: user.id,
             username: user.username,
+            applicationId: applicationId || null,
             format: format,
             duration: duration,
             amount: amount,
@@ -1098,7 +1099,7 @@ app.post('/api/keys/generate', async (req, res) => {
             ip: null,
             lastCheck: null
         };
-        
+
         if (mongoose.connection.readyState === 1) {
             const keyDoc = new Key(keyEntry);
             await keyDoc.save();
@@ -1106,7 +1107,7 @@ app.post('/api/keys/generate', async (req, res) => {
             db.keys.push(keyEntry);
             await writeDB(db);
         }
-        
+
         res.json({ success: true, key: key, data: keyEntry });
     } catch (error) {
         console.error('Generate key error:', error);
@@ -1119,28 +1120,28 @@ app.post('/api/keys/generate', async (req, res) => {
 // Create application
 app.post('/api/applications', async (req, res) => {
     const { token, name } = req.body;
-    
+
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
-    
+
     if (!name || name.trim().length < 2 || name.trim().length > 50) {
         return res.json({ success: false, message: 'Application name must be 2-50 characters' });
     }
-    
+
     try {
         const db = await readDB();
         const user = db.users.find(u => u.token === token);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
-        
+
         // Generate unique IDs (same format as main account)
         const appId = 'app_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex');
         const accountId = crypto.randomBytes(16).toString('hex'); // Same format as user.id
         const apiToken = generateToken(); // Same format as user.token
-        
+
         const application = {
             id: appId,
             userId: user.id,
@@ -1149,7 +1150,7 @@ app.post('/api/applications', async (req, res) => {
             apiToken: apiToken,
             createdAt: new Date().toISOString()
         };
-        
+
         if (mongoose.connection.readyState === 1) {
             const appDoc = new Application(application);
             await appDoc.save();
@@ -1157,7 +1158,7 @@ app.post('/api/applications', async (req, res) => {
             db.applications.push(application);
             await writeDB(db);
         }
-        
+
         res.json({ success: true, application: application });
     } catch (error) {
         console.error('Create application error:', error);
@@ -1168,21 +1169,21 @@ app.post('/api/applications', async (req, res) => {
 // List user's applications
 app.get('/api/applications', async (req, res) => {
     const token = req.headers.authorization || req.query.token;
-    
+
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
-    
+
     try {
         const db = await readDB();
         const user = db.users.find(u => u.token === token);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
-        
+
         const applications = db.applications.filter(a => a.userId === user.id);
-        
+
         res.json({ success: true, applications: applications });
     } catch (error) {
         console.error('List applications error:', error);
@@ -1194,25 +1195,25 @@ app.get('/api/applications', async (req, res) => {
 app.get('/api/applications/:id', async (req, res) => {
     const token = req.headers.authorization || req.query.token;
     const appId = req.params.id;
-    
+
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
-    
+
     try {
         const db = await readDB();
         const user = db.users.find(u => u.token === token);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
-        
+
         const application = db.applications.find(a => a.id === appId && a.userId === user.id);
-        
+
         if (!application) {
             return res.json({ success: false, message: 'Application not found' });
         }
-        
+
         res.json({ success: true, application: application });
     } catch (error) {
         console.error('Get application error:', error);
@@ -1224,25 +1225,25 @@ app.get('/api/applications/:id', async (req, res) => {
 app.delete('/api/applications/:id', async (req, res) => {
     const token = req.headers.authorization || req.query.token;
     const appId = req.params.id;
-    
+
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
-    
+
     try {
         const db = await readDB();
         const user = db.users.find(u => u.token === token);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
-        
+
         const application = db.applications.find(a => a.id === appId && a.userId === user.id);
-        
+
         if (!application) {
             return res.json({ success: false, message: 'Application not found' });
         }
-        
+
         // Delete all keys associated with this application
         if (mongoose.connection.readyState === 1) {
             await Key.deleteMany({ applicationId: appId });
@@ -1252,7 +1253,7 @@ app.delete('/api/applications/:id', async (req, res) => {
             db.applications = db.applications.filter(a => a.id !== appId);
             await writeDB(db);
         }
-        
+
         res.json({ success: true, message: 'Application deleted' });
     } catch (error) {
         console.error('Delete application error:', error);
@@ -1263,43 +1264,43 @@ app.delete('/api/applications/:id', async (req, res) => {
 // Reseller key generation (with balance check and product selection)
 app.post('/api/reseller/keys/generate', async (req, res) => {
     const { token, format, duration, amount, product } = req.body;
-    
+
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
-    
+
     try {
         const db = await readDB();
         const user = db.users.find(u => u.token === token);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
-        
+
         if (user.accountType !== 'reseller') {
             return res.json({ success: false, message: 'This endpoint is for resellers only' });
         }
-        
+
         if (!format || !format.includes('*')) {
             return res.json({ success: false, message: 'Invalid format' });
         }
-        
+
         // Check product permission
         const selectedProduct = product || 'private';
         if (!user.allowedProducts || !user.allowedProducts.includes(selectedProduct)) {
             return res.json({ success: false, message: `You don't have permission to generate keys for product: ${selectedProduct}` });
         }
-        
+
         // Calculate key cost based on duration (20% off prices)
         function calculateKeyCost(duration, amount) {
             const dur = duration ? duration.toLowerCase() : 'day';
             const amt = parseInt(amount) || 1;
-            
+
             // Lifetime key
             if (dur === 'lifetime') {
                 return 179.00;
             }
-            
+
             // Day keys
             if (dur === 'day') {
                 if (amt === 1) return 7.99;
@@ -1307,39 +1308,39 @@ app.post('/api/reseller/keys/generate', async (req, res) => {
                 // For other day amounts, calculate proportionally
                 return 7.99 * amt;
             }
-            
+
             // Week keys
             if (dur === 'week') {
                 if (amt === 1) return 19.00;
                 return 19.00 * amt;
             }
-            
+
             // Month keys
             if (dur === 'month') {
                 if (amt === 1) return 45.00;
                 return 45.00 * amt;
             }
-            
+
             // Year keys (if needed)
             if (dur === 'year') {
                 return 45.00 * 12; // Approximate: 12 months
             }
-            
+
             // Default fallback
             return 7.99;
         }
-        
+
         const keyCost = calculateKeyCost(duration, amount);
         if (!user.balance || user.balance < keyCost) {
             return res.json({ success: false, message: `Insufficient balance. You need $${keyCost.toFixed(2)} to generate this key. Current balance: $${(user.balance || 0).toFixed(2)}` });
         }
-        
+
         // Deduct balance
         user.balance = (user.balance || 0) - keyCost;
-        
+
         const key = generateKey(format);
         const expiresAt = null;
-        
+
         const keyEntry = {
             key: key,
             userId: user.id,
@@ -1356,7 +1357,7 @@ app.post('/api/reseller/keys/generate', async (req, res) => {
             lastCheck: null,
             product: selectedProduct
         };
-        
+
         if (mongoose.connection.readyState === 1) {
             await User.updateOne({ id: user.id }, { balance: user.balance });
             const keyDoc = new Key(keyEntry);
@@ -1365,10 +1366,10 @@ app.post('/api/reseller/keys/generate', async (req, res) => {
             db.keys.push(keyEntry);
             await writeDB(db);
         }
-        
-        res.json({ 
-            success: true, 
-            key: key, 
+
+        res.json({
+            success: true,
+            key: key,
             data: keyEntry,
             balance: user.balance
         });
@@ -1381,25 +1382,25 @@ app.post('/api/reseller/keys/generate', async (req, res) => {
 // Get reseller balance
 app.get('/api/reseller/balance', async (req, res) => {
     const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
-    
+
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
-    
+
     try {
         const db = await readDB();
         const user = db.users.find(u => u.token === token);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
-        
+
         if (user.accountType !== 'reseller') {
             return res.json({ success: false, message: 'This endpoint is for resellers only' });
         }
-        
-        res.json({ 
-            success: true, 
+
+        res.json({
+            success: true,
             balance: user.balance || 0,
             allowedProducts: user.allowedProducts || []
         });
@@ -1412,25 +1413,25 @@ app.get('/api/reseller/balance', async (req, res) => {
 // Get reseller's keys
 app.get('/api/reseller/keys', async (req, res) => {
     const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
-    
+
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
-    
+
     try {
         const db = await readDB();
         const user = db.users.find(u => u.token === token);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
-        
+
         if (user.accountType !== 'reseller') {
             return res.json({ success: false, message: 'This endpoint is for resellers only' });
         }
-        
+
         const keys = db.keys.filter(k => k.userId === user.id);
-        
+
         res.json({ success: true, keys: keys });
     } catch (error) {
         console.error('Get reseller keys error:', error);
@@ -1441,22 +1442,22 @@ app.get('/api/reseller/keys', async (req, res) => {
 // Get user's keys
 app.post('/api/keys/list', async (req, res) => {
     const { token } = req.body;
-    
+
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
-    
+
     try {
         const db = await readDB();
         const user = db.users.find(u => u.token === token);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
-        
+
         // Get only this user's non-hidden keys (exclude admin-generated keys)
         const userKeys = db.keys.filter(k => k.userId === user.id && !k.hidden && !k.createdBy);
-        
+
         res.json({ success: true, keys: userKeys });
     } catch (error) {
         console.error('List keys error:', error);
@@ -1467,29 +1468,29 @@ app.post('/api/keys/list', async (req, res) => {
 // Get stats for user
 app.post('/api/keys/stats', async (req, res) => {
     const { token } = req.body;
-    
+
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
-    
+
     try {
         const db = await readDB();
         const user = db.users.find(u => u.token === token);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'Invalid authentication' });
         }
-        
+
         // Get only this user's non-hidden keys (exclude admin-generated keys)
         const userKeys = db.keys.filter(k => k.userId === user.id && !k.hidden && !k.createdBy);
         const now = new Date();
-        
+
         const total = userKeys.length;
         const active = userKeys.filter(k => !k.expiresAt || new Date(k.expiresAt) > now).length;
         const expired = userKeys.filter(k => k.expiresAt && new Date(k.expiresAt) < now).length;
         const used = userKeys.filter(k => k.usedBy).length;
         const unused = total - used;
-        
+
         res.json({
             success: true,
             stats: { total, active, expired, used, unused }
@@ -1503,23 +1504,23 @@ app.post('/api/keys/stats', async (req, res) => {
 // Add time to key (admin or owner)
 app.post('/api/keys/addtime', async (req, res) => {
     const { token, key, duration, amount } = req.body;
-    
+
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
-    
+
     const isAdmin = isAdminToken(token);
-    
+
     try {
         const db = await readDB();
-        
+
         // Find key
         const keyEntry = db.keys.find(k => k.key === key);
-        
+
         if (!keyEntry) {
             return res.json({ success: false, message: 'Key not found' });
         }
-        
+
         // If not admin, check if user owns the key
         if (!isAdmin) {
             const user = db.users.find(u => u.token === token);
@@ -1530,15 +1531,15 @@ app.post('/api/keys/addtime', async (req, res) => {
                 return res.json({ success: false, message: 'You do not have permission to modify this key' });
             }
         }
-        
+
         keyEntry.expiresAt = addTimeToKey(keyEntry.expiresAt, duration, parseInt(amount));
-        
+
         if (mongoose.connection.readyState === 1) {
             await Key.updateOne({ key: keyEntry.key }, { expiresAt: keyEntry.expiresAt });
         } else {
             await writeDB(db);
         }
-        
+
         res.json({ success: true, message: 'Time added', expiresAt: keyEntry.expiresAt });
     } catch (error) {
         console.error('Add time error:', error);
@@ -1549,23 +1550,23 @@ app.post('/api/keys/addtime', async (req, res) => {
 // Reset HWID (admin or owner)
 app.post('/api/keys/resethwid', async (req, res) => {
     const { token, key } = req.body;
-    
+
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
-    
+
     const isAdmin = isAdminToken(token);
-    
+
     try {
         const db = await readDB();
-        
+
         // Find key
         const keyEntry = db.keys.find(k => k.key === key);
-        
+
         if (!keyEntry) {
             return res.json({ success: false, message: 'Key not found' });
         }
-        
+
         // If not admin, check if user owns the key
         if (!isAdmin) {
             const user = db.users.find(u => u.token === token);
@@ -1576,16 +1577,16 @@ app.post('/api/keys/resethwid', async (req, res) => {
                 return res.json({ success: false, message: 'You do not have permission to modify this key' });
             }
         }
-        
+
         keyEntry.hwid = null;
         keyEntry.usedBy = null;
-        
+
         if (mongoose.connection.readyState === 1) {
             await Key.updateOne({ key: keyEntry.key }, { hwid: null, usedBy: null });
         } else {
             await writeDB(db);
         }
-        
+
         res.json({ success: true, message: 'HWID reset' });
     } catch (error) {
         console.error('Reset HWID error:', error);
@@ -1597,24 +1598,24 @@ app.post('/api/keys/resethwid', async (req, res) => {
 app.delete('/api/keys/:key', async (req, res) => {
     const keyToDelete = req.params.key;
     const token = req.headers.authorization;
-    
+
     if (!token) {
         return res.json({ success: false, message: 'Authentication required' });
     }
-    
+
     // Check if admin token
     const isAdmin = isAdminToken(token);
-    
+
     try {
         const db = await readDB();
-        
+
         // Find key
         const keyEntry = db.keys.find(k => k.key === keyToDelete);
-        
+
         if (!keyEntry) {
             return res.json({ success: false, message: 'Key not found' });
         }
-        
+
         // If not admin, check if user owns the key
         if (!isAdmin) {
             const user = db.users.find(u => u.token === token);
@@ -1625,7 +1626,7 @@ app.delete('/api/keys/:key', async (req, res) => {
                 return res.json({ success: false, message: 'You do not have permission to delete this key' });
             }
         }
-        
+
         // Delete key
         if (mongoose.connection.readyState === 1) {
             await Key.deleteOne({ key: keyToDelete });
@@ -1633,7 +1634,7 @@ app.delete('/api/keys/:key', async (req, res) => {
             db.keys = db.keys.filter(k => k.key !== keyToDelete);
             await writeDB(db);
         }
-        
+
         res.json({ success: true, message: 'Key deleted' });
     } catch (error) {
         console.error('Delete key error:', error);
@@ -1644,33 +1645,33 @@ app.delete('/api/keys/:key', async (req, res) => {
 // CLIENT VALIDATION (No auth required - used by C++ app)
 app.post('/api/validate', async (req, res) => {
     const { key, hwid, ip, accountId, apiToken } = req.body;
-    
-    let clientIp = ip || 
-                   req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-                   req.headers['x-real-ip'] ||
-                   req.socket.remoteAddress ||
-                   'Unknown';
-    
+
+    let clientIp = ip ||
+        req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+        req.headers['x-real-ip'] ||
+        req.socket.remoteAddress ||
+        'Unknown';
+
     if (clientIp.startsWith('::ffff:')) {
         clientIp = clientIp.substring(7);
     }
-    
+
     if (clientIp === '::1' || clientIp === '127.0.0.1') {
         clientIp = 'localhost (127.0.0.1)';
     }
-    
+
     if (!key) {
         return res.json({ success: false, message: 'Key required' });
     }
-    
+
     try {
         const db = await readDB();
         const keyEntry = db.keys.find(k => k.key === key);
-        
+
         if (!keyEntry) {
             return res.json({ success: false, message: 'Invalid key' });
         }
-        
+
         // ACCOUNT VERIFICATION: accountId and apiToken are required
         if (!accountId || !apiToken) {
             return res.json({ success: false, message: 'Application credentials required' });
@@ -1689,9 +1690,9 @@ app.post('/api/validate', async (req, res) => {
         if (keyEntry.userId !== application.userId) {
             return res.json({ success: false, message: 'Key does not belong to this application\'s account' });
         }
-        
+
         const now = new Date().toISOString();
-        
+
         // FIRST USE: Start countdown timer when key is first used
         const isFirstUse = !keyEntry.usedAt;
         if (isFirstUse && hwid) {
@@ -1710,7 +1711,7 @@ app.post('/api/validate', async (req, res) => {
             }
             keyEntry.usedAt = now;
         }
-        
+
         // Check expiration AFTER setting it on first use (or if it was already set)
         if (keyEntry.expiresAt) {
             const expiry = new Date(keyEntry.expiresAt);
@@ -1718,7 +1719,7 @@ app.post('/api/validate', async (req, res) => {
                 return res.json({ success: false, message: 'Key expired' });
             }
         }
-        
+
         // HWID LOCK: Bind key to first HWID (CPU ProcessorId) that uses it
         if (!keyEntry.hwid && hwid) {
             // First time use - bind to this HWID (CPU ProcessorId) permanently
@@ -1729,35 +1730,35 @@ app.post('/api/validate', async (req, res) => {
             keyEntry.hwidLocked = true;
         } else if (keyEntry.hwid && hwid && keyEntry.hwid !== hwid) {
             // HWID MISMATCH - Key is locked to different CPU ProcessorId
-            return res.json({ 
-                success: false, 
-                message: 'HWID Lock: This key is bound to a different computer. Contact support to reset HWID.' 
+            return res.json({
+                success: false,
+                message: 'HWID Lock: This key is bound to a different computer. Contact support to reset HWID.'
             });
         } else if (!hwid) {
             // No HWID (CPU ProcessorId) provided
-            return res.json({ 
-                success: false, 
-                message: 'Hardware ID (CPU ProcessorId) required for validation' 
+            return res.json({
+                success: false,
+                message: 'Hardware ID (CPU ProcessorId) required for validation'
             });
         }
-        
+
         // Update last check time
         keyEntry.lastCheck = now;
         if (!keyEntry.ip) keyEntry.ip = clientIp;
-        
+
         if (mongoose.connection.readyState === 1) {
             await Key.updateOne({ key: keyEntry.key }, keyEntry);
         } else {
             await writeDB(db);
         }
-        
+
         // Calculate time remaining
         let timeRemaining = null;
         let timeRemainingSeconds = null;
-        
+
         // Check if it's a lifetime key
         const isLifetime = keyEntry.duration && keyEntry.duration.toLowerCase().replace(/s$/, '') === 'lifetime';
-        
+
         if (isLifetime) {
             timeRemaining = "Lifetime";
             timeRemainingSeconds = null; // Lifetime keys don't have a time limit
@@ -1765,13 +1766,13 @@ app.post('/api/validate', async (req, res) => {
             const expiry = new Date(keyEntry.expiresAt);
             const nowDate = new Date();
             timeRemainingSeconds = Math.max(0, Math.floor((expiry - nowDate) / 1000));
-            
+
             if (timeRemainingSeconds > 0) {
                 const days = Math.floor(timeRemainingSeconds / 86400);
                 const hours = Math.floor((timeRemainingSeconds % 86400) / 3600);
                 const minutes = Math.floor((timeRemainingSeconds % 3600) / 60);
                 const seconds = timeRemainingSeconds % 60;
-                
+
                 if (days > 0) {
                     timeRemaining = `${days}d ${hours}h ${minutes}m`;
                 } else if (hours > 0) {
@@ -1790,9 +1791,9 @@ app.post('/api/validate', async (req, res) => {
             const amount = keyEntry.amount || 1;
             timeRemaining = `Not used (${amount} ${duration})`;
         }
-        
-        res.json({ 
-            success: true, 
+
+        res.json({
+            success: true,
             message: 'Key valid',
             data: {
                 duration: keyEntry.duration,
@@ -1829,14 +1830,14 @@ app.get('/api/health', (req, res) => {
 // Self-ping to keep server alive (every 14 minutes)
 if (process.env.RENDER) {
     const url = process.env.RENDER_EXTERNAL_URL || 'https://answub-back.onrender.com';
-    
+
     // Ping immediately on startup
     https.get(`${url}/api/health`, (res) => {
         console.log(`[Self-Ping] Initial ping: ${res.statusCode} at ${new Date().toISOString()}`);
     }).on('error', (err) => {
         console.error(`[Self-Ping] Initial ping error: ${err.message}`);
     });
-    
+
     // Then ping every 14 minutes
     setInterval(() => {
         https.get(`${url}/api/health`, (res) => {
@@ -1845,29 +1846,29 @@ if (process.env.RENDER) {
             console.error(`[Self-Ping] Error: ${err.message}`);
         });
     }, 14 * 60 * 1000); // 14 minutes in milliseconds
-    
+
     console.log('✅ Self-ping enabled - will ping every 14 minutes to keep server alive');
 }
 
 // Admin verification helper
 function isAdminToken(token) {
     if (!token) return false;
-    
+
     // Check if token is in admin tokens map
     if (adminTokens.has(token)) {
         const tokenData = adminTokens.get(token);
-        
+
         // Check if token expired
         if (Date.now() - tokenData.createdAt > ADMIN_TOKEN_EXPIRY) {
             adminTokens.delete(token);
             return false;
         }
-        
+
         // Update last access
         tokenData.lastAccess = Date.now();
         return true;
     }
-    
+
     return false;
 }
 
@@ -1884,11 +1885,11 @@ function cleanupAdminTokens() {
 // Admin middleware
 function requireAdmin(req, res, next) {
     const token = req.headers['authorization'] || req.body.token || req.query.token;
-    
+
     if (!isAdminToken(token)) {
         return res.json({ success: false, message: 'Unauthorized: Admin access required' });
     }
-    
+
     next();
 }
 
@@ -1896,12 +1897,12 @@ function requireAdmin(req, res, next) {
 function requireBot(req, res, next) {
     // Check X-Bot-Api-Key header first (preferred), then Authorization, then body/query
     const token = req.headers['x-bot-api-key'] || req.headers['authorization'] || req.body.botApiKey || req.query.botApiKey;
-    
+
     if (!token || token !== BOT_API_KEY) {
         console.log(`[SECURITY] Bot API key check failed. Provided: ${token ? token.substring(0, 10) + '...' : 'none'}`);
         return res.json({ success: false, message: 'Unauthorized: Bot API key required' });
     }
-    
+
     next();
 }
 
@@ -1918,37 +1919,37 @@ function verifyAdmin(username, password) {
 
 // Upload update file (admin only)
 const multer = require('multer');
-const upload = multer({ 
+const upload = multer({
     dest: UPDATES_DIR,
     limits: { fileSize: 100 * 1024 * 1024 } // 100MB max
 });
 
 app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
     const { username, password, version, changelog, program } = req.body;
-    
+
     // Verify admin
     if (!verifyAdmin(username, password)) {
         return res.json({ success: false, message: 'Unauthorized' });
     }
-    
+
     if (!req.file) {
         return res.json({ success: false, message: 'No file uploaded' });
     }
-    
+
     if (!version || version.trim() === '') {
         return res.json({ success: false, message: 'Version is required' });
     }
-    
+
     // Validate program parameter
     const programType = (program && program.trim().toLowerCase() === 'spoofer') ? 'spoofer' : 'cheat';
-    
+
     // Rename file to a standard name based on program
     const finalPath = path.join(UPDATES_DIR, programType === 'spoofer' ? 'latest_spoofer.exe' : 'latest_cheat.exe');
     if (fs.existsSync(finalPath)) {
         fs.unlinkSync(finalPath); // Delete old file
     }
     fs.renameSync(req.file.path, finalPath);
-    
+
     // Save version info
     const updateInfo = {
         version: version.trim(),
@@ -1957,7 +1958,7 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
         uploadedAt: new Date().toISOString(),
         program: programType
     };
-    
+
     // Save to program-specific file
     const infoFile = programType === 'spoofer' ? UPDATE_INFO_SPOOFER_FILE : UPDATE_INFO_CHEAT_FILE;
     try {
@@ -1966,14 +1967,14 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
     } catch (error) {
         console.error('Error saving update info:', error);
     }
-    
+
     // Send Discord webhook notification
-    const discordWebhookUrl = programType === 'spoofer' 
+    const discordWebhookUrl = programType === 'spoofer'
         ? 'https://discord.com/api/webhooks/1450664304415342875/d8jbYzhUylyEJu3bwLaBzFthlAZv3YTdY02JlaSU1HsQ45YRhqOsCR6Vn_GntxTnDOLA'
         : 'https://discord.com/api/webhooks/1450664233888120963/_DwGpUJHnw-7WcH7h5fVuCAYmKv7xZtdFW5vzRP9rCfsKE5KK9BI_yK20ZGF6pmwTWri';
     const changelogText = changelog && changelog.trim() ? changelog.trim() : 'No changes specified';
     const programName = programType === 'spoofer' ? 'Artic Spoofer' : 'Fortnite Private';
-    
+
     const embed = {
         title: `${programName} - Update Available`,
         description: `Version ${updateInfo.version} is now available.`,
@@ -2000,17 +2001,17 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
         },
         timestamp: updateInfo.uploadedAt
     };
-    
+
     const webhookPayload = {
         embeds: [embed],
         content: `Run ${programName} again to update.`
     };
-    
+
     // Send Discord webhook (non-blocking)
     try {
         const url = new URL(discordWebhookUrl);
         const postData = JSON.stringify(webhookPayload);
-        
+
         const options = {
             hostname: url.hostname,
             path: url.pathname + url.search,
@@ -2020,25 +2021,25 @@ app.post('/api/admin/upload', upload.single('file'), async (req, res) => {
                 'Content-Length': Buffer.byteLength(postData)
             }
         };
-        
+
         const req = https.request(options, (res) => {
             if (res.statusCode !== 200 && res.statusCode !== 204) {
                 console.error('Discord webhook returned status:', res.statusCode);
             }
         });
-        
+
         req.on('error', (err) => {
             console.error('Failed to send Discord webhook:', err);
         });
-        
+
         req.write(postData);
         req.end();
     } catch (err) {
         console.error('Error sending Discord webhook:', err);
     }
-    
-    res.json({ 
-        success: true, 
+
+    res.json({
+        success: true,
         message: 'File uploaded successfully',
         version: updateInfo.version,
         filename: updateInfo.filename,
@@ -2054,7 +2055,7 @@ app.get('/api/updates/check', (req, res) => {
         const updateFile = path.join(UPDATES_DIR, program === 'spoofer' ? 'latest_spoofer.exe' : 'latest_cheat.exe');
         const clientVersion = req.query.version || '';
         const infoFile = program === 'spoofer' ? UPDATE_INFO_SPOOFER_FILE : UPDATE_INFO_CHEAT_FILE;
-        
+
         if (fs.existsSync(updateFile)) {
             // Read version info
             let updateInfo = null;
@@ -2065,21 +2066,21 @@ app.get('/api/updates/check', (req, res) => {
                     console.error('Error reading update info:', e);
                 }
             }
-            
+
             const stats = fs.statSync(updateFile);
             const serverVersion = updateInfo ? updateInfo.version : null;
-            
+
             // Normalize versions for comparison (remove leading zeros, handle different formats)
             const normalizeVersion = (v) => {
                 if (!v) return '';
                 return v.trim().replace(/^0+/, '').replace(/\.0+$/, '') || '0';
             };
-            
+
             const normalizedClient = normalizeVersion(clientVersion);
             const normalizedServer = normalizeVersion(serverVersion);
-            
+
             // If client provided version and it matches server version, no update needed
-            if (clientVersion && serverVersion && 
+            if (clientVersion && serverVersion &&
                 (clientVersion.trim() === serverVersion.trim() || normalizedClient === normalizedServer)) {
                 res.json({
                     success: true,
@@ -2124,7 +2125,7 @@ app.get('/api/updates/check', (req, res) => {
                     // Ignore error
                 }
             }
-            
+
             res.json({
                 success: true,
                 hasUpdate: false,
@@ -2170,12 +2171,12 @@ app.get('/api/admin/users/:userId', requireAdmin, async (req, res) => {
     try {
         const { userId } = req.params;
         const db = await readDB();
-        
+
         const user = db.users.find(u => u.id === userId);
         if (!user) {
             return res.json({ success: false, message: 'User not found' });
         }
-        
+
         const userKeys = db.keys.filter(k => k.userId === userId).map(k => ({
             key: k.key,
             format: k.format,
@@ -2188,7 +2189,7 @@ app.get('/api/admin/users/:userId', requireAdmin, async (req, res) => {
             hwid: k.hwid,
             ip: k.ip
         }));
-        
+
         res.json({
             success: true,
             user: {
@@ -2266,7 +2267,7 @@ app.get('/api/admin/keys', requireAdmin, async (req, res) => {
                 userEmail: user ? user.email : 'unknown@example.com'
             };
         });
-        
+
         res.json({ success: true, keys });
     } catch (error) {
         console.error('List all keys error:', error);
@@ -2279,16 +2280,16 @@ app.delete('/api/admin/keys/:key', requireAdmin, async (req, res) => {
     try {
         const { key } = req.params;
         const db = await readDB();
-        
+
         const keyIndex = db.keys.findIndex(k => k.key === key);
         if (keyIndex === -1) {
             return res.json({ success: false, message: 'Key not found' });
         }
-        
+
         // Remove key
         db.keys.splice(keyIndex, 1);
         await writeDB(db);
-        
+
         res.json({ success: true, message: 'Key deleted successfully' });
     } catch (error) {
         console.error('Delete key error:', error);
@@ -2301,22 +2302,22 @@ app.post('/api/admin/keys/generate', requireAdmin, async (req, res) => {
     try {
         const { userId, format, duration, amount, hidden = true } = req.body;
         const token = req.headers['authorization'];
-        
+
         if (!userId || !format || !duration) {
             return res.json({ success: false, message: 'User ID, format, and duration required' });
         }
-        
+
         if (duration !== 'lifetime' && (!amount || amount < 1)) {
             return res.json({ success: false, message: 'Amount must be at least 1 for non-lifetime keys' });
         }
-        
+
         const db = await readDB();
         const user = db.users.find(u => u.id === userId);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'User not found' });
         }
-        
+
         // Get admin user for logging
         let adminUsername = 'Admin';
         if (token) {
@@ -2325,13 +2326,13 @@ app.post('/api/admin/keys/generate', requireAdmin, async (req, res) => {
                 adminUsername = adminUser.username;
             }
         }
-        
+
         // Generate key
         const key = generateKey(format);
-        
+
         // Don't set expiresAt on generation - it will start when first used (like regular key generation)
         const expiresAt = null;
-        
+
         // Create key record
         const keyRecord = {
             key,
@@ -2350,20 +2351,20 @@ app.post('/api/admin/keys/generate', requireAdmin, async (req, res) => {
             createdBy: adminUsername,
             hidden: hidden // Add hidden flag - defaults to true for admin keys
         };
-        
+
         // Save key
         db.keys.push(keyRecord);
-        
+
         if (mongoose.connection.readyState === 1) {
             const newKey = new Key(keyRecord);
             await newKey.save();
         } else {
             await writeDB(db);
         }
-        
+
         console.log(`Admin ${adminUsername} generated key for user ${user.username}: ${key}`);
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             key,
             data: {
                 expiresAt,
@@ -2383,34 +2384,34 @@ app.post('/api/admin/users/:userId/reset-password', requireAdmin, async (req, re
     try {
         const { userId } = req.params;
         const { newPassword } = req.body;
-        
+
         if (!newPassword) {
             return res.json({ success: false, message: 'New password required' });
         }
-        
+
         if (newPassword.length < 6 || newPassword.length > 100) {
             return res.json({ success: false, message: 'Password must be 6-100 characters' });
         }
-        
+
         const db = await readDB();
         const user = db.users.find(u => u.id === userId);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'User not found' });
         }
-        
+
         // Update password
         user.password = hashPassword(newPassword);
-        
+
         // Rotate token for security
         user.token = generateToken();
-        
+
         if (mongoose.connection.readyState === 1) {
             await User.updateOne({ id: user.id }, { password: user.password, token: user.token });
         } else {
             await writeDB(db);
         }
-        
+
         console.log(`Admin reset password for user: ${user.username}`);
         res.json({ success: true, message: 'Password reset successfully' });
     } catch (error) {
@@ -2424,20 +2425,20 @@ app.delete('/api/admin/users/:userId', requireAdmin, async (req, res) => {
     try {
         const { userId } = req.params;
         const db = await readDB();
-        
+
         // Remove user
         db.users = db.users.filter(u => u.id !== userId);
-        
+
         // Remove all user's keys
         db.keys = db.keys.filter(k => k.userId !== userId);
-        
+
         if (mongoose.connection.readyState === 1) {
             await User.deleteOne({ id: userId });
             await Key.deleteMany({ userId: userId });
         } else {
             await writeDB(db);
         }
-        
+
         res.json({ success: true, message: 'User and all associated keys deleted' });
     } catch (error) {
         console.error('Delete user error:', error);
@@ -2448,45 +2449,45 @@ app.delete('/api/admin/users/:userId', requireAdmin, async (req, res) => {
 // Create user (admin only)
 app.post('/api/admin/users', requireAdmin, async (req, res) => {
     const { username, email, password, accountType, initialBalance, allowedProducts } = req.body;
-    
+
     if (!username || !email || !password) {
         return res.json({ success: false, message: 'Username, email, and password required' });
     }
-    
+
     if (!validateInput(username, 30)) {
         return res.json({ success: false, message: 'Invalid username' });
     }
-    
+
     if (!validateEmail(email)) {
         return res.json({ success: false, message: 'Invalid email' });
     }
-    
+
     if (password.length < 6 || password.length > 100) {
         return res.json({ success: false, message: 'Password must be 6-100 characters' });
     }
-    
+
     // Validate account type
     const validAccountTypes = ['user', 'reseller'];
     const selectedAccountType = accountType || 'user';
     if (!validAccountTypes.includes(selectedAccountType)) {
         return res.json({ success: false, message: 'Invalid account type' });
     }
-    
+
     try {
         const db = await readDB();
-        
+
         // Check if username already exists
         const existingUser = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
         if (existingUser) {
             return res.json({ success: false, message: 'Username already taken' });
         }
-        
+
         // Check if email already exists
         const existingEmail = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
         if (existingEmail) {
             return res.json({ success: false, message: 'Email already registered' });
         }
-        
+
         const userData = {
             id: crypto.randomBytes(16).toString('hex'),
             username: username,
@@ -2498,13 +2499,13 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
             lockedUntil: null,
             accountType: selectedAccountType
         };
-        
+
         // Add reseller-specific fields if account type is reseller
         if (selectedAccountType === 'reseller') {
             userData.balance = parseFloat(initialBalance) || 0;
             userData.allowedProducts = Array.isArray(allowedProducts) ? allowedProducts : (allowedProducts ? [allowedProducts] : ['private']);
         }
-        
+
         if (mongoose.connection.readyState === 1) {
             const user = new User(userData);
             await user.save();
@@ -2512,7 +2513,7 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
             db.users.push(userData);
             await writeDB(db);
         }
-        
+
         res.json({
             success: true,
             message: 'User created successfully',
@@ -2536,37 +2537,37 @@ app.post('/api/admin/resellers/:userId/balance', requireAdmin, async (req, res) 
     try {
         const { userId } = req.params;
         const { balance } = req.body;
-        
+
         if (balance === undefined || balance === null) {
             return res.json({ success: false, message: 'Balance amount required' });
         }
-        
+
         const balanceAmount = parseFloat(balance);
         if (isNaN(balanceAmount) || balanceAmount < 0) {
             return res.json({ success: false, message: 'Invalid balance amount' });
         }
-        
+
         const db = await readDB();
         const user = db.users.find(u => u.id === userId);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'User not found' });
         }
-        
+
         if (user.accountType !== 'reseller') {
             return res.json({ success: false, message: 'User is not a reseller' });
         }
-        
+
         user.balance = balanceAmount;
-        
+
         if (mongoose.connection.readyState === 1) {
             await User.updateOne({ id: userId }, { balance: user.balance });
         } else {
             await writeDB(db);
         }
-        
-        res.json({ 
-            success: true, 
+
+        res.json({
+            success: true,
             message: 'Balance updated successfully',
             balance: user.balance
         });
@@ -2581,37 +2582,37 @@ app.post('/api/admin/resellers/:userId/add-balance', requireAdmin, async (req, r
     try {
         const { userId } = req.params;
         const { amount } = req.body;
-        
+
         if (amount === undefined || amount === null) {
             return res.json({ success: false, message: 'Amount required' });
         }
-        
+
         const addAmount = parseFloat(amount);
         if (isNaN(addAmount) || addAmount <= 0) {
             return res.json({ success: false, message: 'Invalid amount' });
         }
-        
+
         const db = await readDB();
         const user = db.users.find(u => u.id === userId);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'User not found' });
         }
-        
+
         if (user.accountType !== 'reseller') {
             return res.json({ success: false, message: 'User is not a reseller' });
         }
-        
+
         user.balance = (user.balance || 0) + addAmount;
-        
+
         if (mongoose.connection.readyState === 1) {
             await User.updateOne({ id: userId }, { balance: user.balance });
         } else {
             await writeDB(db);
         }
-        
-        res.json({ 
-            success: true, 
+
+        res.json({
+            success: true,
             message: `Added $${addAmount} to balance`,
             balance: user.balance
         });
@@ -2626,32 +2627,32 @@ app.post('/api/admin/resellers/:userId/products', requireAdmin, async (req, res)
     try {
         const { userId } = req.params;
         const { allowedProducts } = req.body;
-        
+
         if (!Array.isArray(allowedProducts)) {
             return res.json({ success: false, message: 'allowedProducts must be an array' });
         }
-        
+
         const db = await readDB();
         const user = db.users.find(u => u.id === userId);
-        
+
         if (!user) {
             return res.json({ success: false, message: 'User not found' });
         }
-        
+
         if (user.accountType !== 'reseller') {
             return res.json({ success: false, message: 'User is not a reseller' });
         }
-        
+
         user.allowedProducts = allowedProducts;
-        
+
         if (mongoose.connection.readyState === 1) {
             await User.updateOne({ id: userId }, { allowedProducts: user.allowedProducts });
         } else {
             await writeDB(db);
         }
-        
-        res.json({ 
-            success: true, 
+
+        res.json({
+            success: true,
             message: 'Allowed products updated successfully',
             allowedProducts: user.allowedProducts
         });
@@ -2677,7 +2678,7 @@ app.get('/api/admin/resellers', requireAdmin, async (req, res) => {
                 lastLogin: u.lastLogin || 'Never',
                 keyCount: db.keys.filter(k => k.userId === u.id).length
             }));
-        
+
         res.json({ success: true, resellers });
     } catch (error) {
         console.error('Get resellers error:', error);
@@ -2689,8 +2690,8 @@ app.get('/api/admin/resellers', requireAdmin, async (req, res) => {
 app.get('/api/admin/invites', requireAdmin, async (req, res) => {
     try {
         const invitesData = await readInvites();
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             invites: invitesData.invites || []
         });
     } catch (error) {
@@ -2702,7 +2703,7 @@ app.get('/api/admin/invites', requireAdmin, async (req, res) => {
 // Add invite codes (admin only)
 app.post('/api/admin/invites', requireAdmin, async (req, res) => {
     const { count = 10 } = req.body;
-    
+
     try {
         // Generate new invites
         const newInvites = [];
@@ -2716,7 +2717,7 @@ app.post('/api/admin/invites', requireAdmin, async (req, res) => {
             newInvites.push(invite);
             newHashes.push(hashInvite(invite));
         }
-        
+
         if (mongoose.connection.readyState === 1) {
             // Save to MongoDB
             const invitesToAdd = newInvites.map((code, index) => ({
@@ -2741,7 +2742,7 @@ app.post('/api/admin/invites', requireAdmin, async (req, res) => {
             invitesData.invites = [...existingInvites, ...newInviteObjects];
             fs.writeFileSync(INVITES_FILE, JSON.stringify(invitesData, null, 2));
         }
-        
+
         // Return plain text codes only once (for admin to see/save)
         res.json({ success: true, message: `${count} invite codes generated`, invites: newInvites });
     } catch (error) {
@@ -2754,7 +2755,7 @@ app.post('/api/admin/invites', requireAdmin, async (req, res) => {
 app.delete('/api/admin/invites/:invite', requireAdmin, async (req, res) => {
     const { invite } = req.params;
     const { hash } = req.query; // Allow hash to be passed as query parameter for "***" codes
-    
+
     try {
         // Determine the hash to delete
         let inviteHash;
@@ -2771,7 +2772,7 @@ app.delete('/api/admin/invites/:invite', requireAdmin, async (req, res) => {
             // Plain code - hash it
             inviteHash = hashInvite(invite);
         }
-        
+
         if (mongoose.connection.readyState === 1) {
             // Delete from MongoDB
             const result = await Invite.deleteOne({ hash: inviteHash });
@@ -2789,15 +2790,15 @@ app.delete('/api/admin/invites/:invite', requireAdmin, async (req, res) => {
                 }
                 return i.hash !== inviteHash;
             });
-            
+
             if (filteredInvites.length === existingInvites.length) {
                 return res.json({ success: false, message: 'Invite code not found' });
             }
-            
+
             invitesData.invites = filteredInvites;
             fs.writeFileSync(INVITES_FILE, JSON.stringify(invitesData, null, 2));
         }
-        
+
         res.json({ success: true, message: 'Invite code deleted' });
     } catch (error) {
         console.error('Delete invite error:', error);
@@ -2808,23 +2809,23 @@ app.delete('/api/admin/invites/:invite', requireAdmin, async (req, res) => {
 // Bot-only key generation (no user account required, only bot can access)
 app.post('/api/admin/keys/generate', requireBot, async (req, res) => {
     const { format, duration, amount } = req.body;
-    
+
     if (!format || !format.includes('*')) {
         return res.json({ success: false, message: 'Invalid format. Must include * for random characters.' });
     }
-    
+
     if (!duration || !['days', 'weeks', 'months', 'years'].includes(duration)) {
         return res.json({ success: false, message: 'Invalid duration. Must be: days, weeks, months, or years.' });
     }
-    
+
     if (!amount || amount < 1) {
         return res.json({ success: false, message: 'Amount must be at least 1.' });
     }
-    
+
     try {
         const key = generateKey(format);
         const expiresAt = null; // Will be set on first use
-        
+
         const keyEntry = {
             key: key,
             userId: 'admin', // Special admin user ID
@@ -2841,7 +2842,7 @@ app.post('/api/admin/keys/generate', requireBot, async (req, res) => {
             lastCheck: null,
             hwidLocked: false
         };
-        
+
         if (mongoose.connection.readyState === 1) {
             const keyDoc = new Key(keyEntry);
             await keyDoc.save();
@@ -2850,7 +2851,7 @@ app.post('/api/admin/keys/generate', requireBot, async (req, res) => {
             db.keys.push(keyEntry);
             await writeDB(db);
         }
-        
+
         res.json({ success: true, key: key, data: keyEntry });
     } catch (error) {
         console.error('Admin generate key error:', error);
@@ -2872,7 +2873,7 @@ app.get('/api/admin/keys', requireBot, async (req, res) => {
 // Cleanup old invite codes (admin only) - keeps only specified codes
 app.post('/api/admin/invites/cleanup', requireAdmin, async (req, res) => {
     const { keepCodes = [] } = req.body; // Array of codes to keep
-    
+
     try {
         if (mongoose.connection.readyState === 1) {
             // MongoDB cleanup
@@ -2887,18 +2888,18 @@ app.post('/api/admin/invites/cleanup', requireAdmin, async (req, res) => {
             // JSON file cleanup
             const invitesData = await readInvites();
             const existingInvites = invitesData.invites || [];
-            
+
             if (keepCodes.length > 0) {
                 const keepHashes = keepCodes.map(code => hashInvite(code));
                 const filteredInvites = existingInvites.filter(i => {
                     const inviteHash = typeof i === 'string' ? i : i.hash;
                     return keepHashes.includes(inviteHash);
                 });
-                
+
                 invitesData.invites = filteredInvites;
                 fs.writeFileSync(INVITES_FILE, JSON.stringify(invitesData, null, 2));
-                res.json({ 
-                    success: true, 
+                res.json({
+                    success: true,
                     message: `Cleaned up ${existingInvites.length - filteredInvites.length} invite codes`,
                     deleted: existingInvites.length - filteredInvites.length
                 });
@@ -2916,16 +2917,16 @@ app.post('/api/admin/invites/cleanup', requireAdmin, async (req, res) => {
 app.get('/api/updates/download', (req, res) => {
     const program = (req.query.program && req.query.program.trim().toLowerCase() === 'spoofer') ? 'spoofer' : 'cheat';
     const updateFile = path.join(UPDATES_DIR, program === 'spoofer' ? 'latest_spoofer.exe' : 'latest_cheat.exe');
-    
+
     if (!fs.existsSync(updateFile)) {
         return res.status(404).json({ success: false, message: 'Update file not found' });
     }
-    
+
     res.download(updateFile, program === 'spoofer' ? 'latest_spoofer.exe' : 'latest_cheat.exe', (err) => {
         if (err) {
             console.error('Download error:', err);
             if (!res.headersSent) {
-            res.status(500).json({ success: false, message: 'Download failed' });
+                res.status(500).json({ success: false, message: 'Download failed' });
             }
         }
     });
