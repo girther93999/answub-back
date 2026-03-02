@@ -1691,6 +1691,12 @@ app.post('/api/validate', async (req, res) => {
             return res.json({ success: false, message: 'Key does not belong to this application\'s account' });
         }
 
+        // Ensure the key is used only on the specific application it was generated for
+        // (Reseller keys might not have an applicationId, but regular user keys should)
+        if (keyEntry.applicationId && keyEntry.applicationId !== application.id) {
+            return res.json({ success: false, message: 'Key is not valid for this specific application' });
+        }
+
         const now = new Date().toISOString();
 
         // FIRST USE: Start countdown timer when key is first used
